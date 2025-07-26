@@ -21,6 +21,60 @@ import Icon from 'ol/style/Icon';
 import LineString from 'ol/geom/LineString';
 import { Stroke } from 'ol/style';
 
+// --- Logo Wall Images ---
+const logoWallImages = [
+  "https://www.shipbob.com/wp-content/uploads/2023/10/2f854a399a4d8ac1b7b1aa7a78836549.png",
+  "https://www.shipbob.com/wp-content/uploads/2024/11/414d49e28e8fa74ca8e7604493adb78b.svg",
+  "https://www.shipbob.com/wp-content/uploads/2024/11/58136c17b9cbdfa9a8d9c4e3e6f597f4.svg",
+  "https://www.shipbob.com/wp-content/uploads/2022/04/Chamberlain_Coffee_Logo.png",
+  "https://www.shipbob.com/wp-content/uploads/2023/10/72ed96bf6febf9764415855386810276.png",
+  "https://www.shipbob.com/wp-content/uploads/2023/10/da85ba7fb0752aeb5d19bd292d70a232.png",
+  "https://www.shipbob.com/wp-content/uploads/2022/04/100_Thieveslogo_profile-bw.png",
+  "https://www.shipbob.com/wp-content/uploads/2024/11/2afc122e89b8fc6348a4d76fb63d5ef5.svg",
+  "https://www.shipbob.com/wp-content/uploads/2024/12/a117347e92ac840408db273df2792a98.png"
+];
+
+// --- Testimonials ---
+const testimonials = [
+  {
+    quote: "Swift Logistics has transformed our delivery experience. Our customers are happier and our team is more efficient.",
+    name: "Brian Herbstreit",
+    position: "Owner, Nothing Bundt Cakes",
+    logo: "https://www.dropoff.com/wp-content/uploads/2023/01/Logo_5.png",
+    photo: "https://www.dropoff.com/wp-content/uploads/2022/11/S_3.png"
+  },
+  {
+    quote: "We scaled our business with Swift Logistics and saw a 40% reduction in fulfillment costs.",
+    name: "Ali Shahid",
+    position: "COO, Our Place",
+    logo: "https://www.shipbob.com/wp-content/uploads/2024/11/58136c17b9cbdfa9a8d9c4e3e6f597f4.svg",
+    photo: "https://www.shipbob.com/wp-content/uploads/2024/11/58136c17b9cbdfa9a8d9c4e3e6f597f4.svg"
+  },
+  {
+    quote: "Swift Logistics offers the best support and reliability for our growing brand.",
+    name: "Stephanie Lee",
+    position: "COO, PetLab Co.",
+    logo: "https://www.shipbob.com/wp-content/uploads/2024/11/2afc122e89b8fc6348a4d76fb63d5ef5-1.svg",
+    photo: "https://www.shipbob.com/wp-content/uploads/2024/11/2afc122e89b8fc6348a4d76fb63d5ef5-1.svg"
+  }
+];
+
+// --- Service Grid ---
+const serviceGrid = [
+  { icon: "fulfillment", title: "Order Fulfillment", desc: "Fast, accurate, and scalable fulfillment for all your ecommerce needs." },
+  { icon: "shipping", title: "Shipping", desc: "Same-day, next-day, and international shipping options." },
+  { icon: "returns", title: "Returns Management", desc: "Streamlined returns and reverse logistics." },
+  { icon: "inventory", title: "Inventory Management", desc: "Real-time inventory tracking and reporting." }
+];
+
+// --- Industry Grid ---
+const industryGrid = [
+  { title: "Healthcare", img: "healthcare.svg", brands: ["quest.png", "labcorp-2.png"] },
+  { title: "Retail", img: "retail.svg", brands: ["neiman.png", "susie-cackes.png"] },
+  { title: "Food & Beverage", img: "food.svg", brands: ["sprinkles.png", "holt.png"] },
+  { title: "Technology", img: "tech.svg", brands: ["helix.png", "ricon.png"] }
+];
+
 // --- Geocoding Helper ---
 async function reverseGeocode(lat, lon) {
   const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`;
@@ -233,6 +287,20 @@ async function fetchShipment(trackingId) {
     toastr.error("Error fetching product.");
     return null;
   }
+}
+
+// --- Logo Wall Animation ---
+function animateLogoWall() {
+  const wall = document.querySelector('.animated-logo-wall-track');
+  if (!wall) return;
+  let scrollAmount = 0;
+  function step() {
+    scrollAmount += 0.5;
+    wall.style.transform = `translateX(-${scrollAmount}px)`;
+    if (scrollAmount > wall.scrollWidth / 2) scrollAmount = 0;
+    requestAnimationFrame(step);
+  }
+  step();
 }
 
 const home = () => {
