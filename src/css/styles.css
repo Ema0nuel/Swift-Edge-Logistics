@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  font-family: "BankFont" !important;
+  font-weight: 500 !important;
+  font-size: 12px;
+}
+html,
+body {
+  scroll-behavior: smooth;
+  font-family: "BankFont" !important;
+}
+@font-face {
+  font-family: "BankFont";
+  font-style: normal;
+  font-weight: 100 900;
+  src:
+    url("https://cdn.jsdelivr.net/fontsource/fonts/inter@latest/latin-400-normal.woff2") format("woff2"),
+    url("https://cdn.jsdelivr.net/fontsource/fonts/inter@latest/latin-400-normal.woff") format("woff");
+  font-display: swap;
+}
+.active-p {
+  @apply text-primary dark:text-accent font-bold underline underline-offset-8 transition-colors duration-300;
+}
+/* Navbar hamburger and menu transitions */
+.hamburger-line {
+  @apply absolute left-0 block h-0.5 bg-primary dark:bg-peach transition-all duration-300;
+  width: 100%;
+}
+.hamburger-line.top {
+  @apply top-0;
+}
+.hamburger-line.middle {
+  @apply top-1/2 -translate-y-1/2;
+}
+.hamburger-line.bottom {
+  @apply bottom-0;
+}
+#hamburger-icon.open .top {
+  @apply top-1/2 -translate-y-1/2 rotate-45;
+}
+#hamburger-icon.open .middle {
+  @apply opacity-0;
+}
+#hamburger-icon.open .bottom {
+  @apply bottom-1/2 translate-y-1/2 -rotate-45;
+}
+/* Smooth mobile menu transitions */
+#mobile-menu {
+  transition-property: transform, opacity;
+  transition-duration: 300ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+#mobile-menu-overlay {
+  transition-property: opacity;
+  transition-duration: 300ms;
+}
+
+input,
+select,
+textarea {
+  @apply dark:text-primary-dark;
+}
+
+/* Hide Google Translate top banner */
+body .goog-te-banner-frame.skiptranslate {
+  display: none !important;
+}
+
+/* Hide the Google Translate tooltips and dropdown UI */
+.goog-logo-link,
+.goog-te-gadget span,
+#goog-gt-tt,
+.goog-te-balloon-frame,
+div#goog-gt-tt,
+iframe.goog-te-banner-frame,
+.goog-te-menu-value {
+  display: none !important;
+}
+
+.skiptranslate {
+  display: none;
+}

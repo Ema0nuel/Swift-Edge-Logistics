@@ -1,0 +1,87 @@
+npm install dayjs nanoid resend @supabase/supabase-js chart.js leaflet @types/leaflet toastr lodash
+1. Stripe Dashboard (Base System Style)
+📌 https://dashboard.stripe.com
+
+Why it fits:
+Clean, modular layout
+
+Sidebar navigation (perfect for role switching)
+
+Dynamic tables, modals, and charts
+
+Responsive for mobile/desktop
+
+Admin-friendly UI with logs, filters, etc.
+
+Use it for:
+Admin dashboard
+
+User panel layout (manage deliveries or products)
+
+Transaction history / item status UI
+
+Settings (2FA, password, notifications, etc.)
+
+✅ 2. StockX Seller Flow
+📌 https://stockx.com/sell
+
+Why it fits:
+Great multi-step product upload flow
+
+Visual product cards
+
+“Pending Review” vs “Live” status system
+
+Professional selling interface with price controls
+
+Use it for:
+Product listing (consignment)
+
+Seller onboarding & drop process
+
+Showing item sales history & status
+
+✅ 3. Uber Freight UI
+📌 https://freight.uber.com
+
+Why it fits:
+Clean, modern courier UI
+
+Route management + progress updates
+
+Delivery request forms with steps
+
+ETA, live location, status logs
+
+Use it for:
+Delivery drop-off
+
+Real-time delivery tracker
+
+Courier simulation logic
+
+Sender dashboard
+
+
+
+Views:
+<!-- ========== Start Section ========== -->
+home 
+notfound
+plans
+track products
+careers
+security
+about 
+services
+contact
+business
+drop off
+terms
+privacy
+INDUSTRIES
+healthcare
+retail
+industrial
+
+<!-- ========== End Section ========== -->
