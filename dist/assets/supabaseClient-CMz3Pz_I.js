@@ -1,0 +1,2 @@
+import{createClient as s}from"https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";const I="https://pyslfvzwcmigrryoakpc.supabase.co",p="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB5c2xmdnp3Y21pZ3JyeW9ha3BjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI5MjYzOTAsImV4cCI6MjA2ODUwMjM5MH0.Jlb4N79HMFRgnuWcsp7FtgTNB0WQ1Lzb4NIEh79jnJs",i=s(I,p);export{i as s};
+//# sourceMappingURL=supabaseClient-CMz3Pz_I.js.map

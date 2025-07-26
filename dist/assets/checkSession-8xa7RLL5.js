@@ -1,0 +1,2 @@
+import{s as o}from"./supabaseClient-CMz3Pz_I.js";async function n(r=!1){const{data:{session:e}}=await o.auth.getSession();if(r&&e&&e.user)return window.location.href="/user/dashboard",!1;if(!r&&(!e||!e.user))return window.location.href="/user/login",!1;if(e&&e.user){const{data:s,error:i}=await o.from("profiles").select("*").eq("id",e.user.id).single();if(i||!s)return window.location.href="/user/login",!1;e.profile=s}return!0}export{n as c};
+//# sourceMappingURL=checkSession-8xa7RLL5.js.map
