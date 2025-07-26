@@ -20,7 +20,7 @@ async function deleteSupabaseUser(user_id) {
 }
 // --------------------------------
 
-const defaultAvatar = "/src/images/avatar-default.png";
+import defaultAvatar from "../../../images/avatar-default.png";
 
 // Utility: Show spinner overlay
 function showSpinner() {

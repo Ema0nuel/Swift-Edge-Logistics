@@ -17,6 +17,7 @@ import Style from 'ol/style/Style';
 import Icon from 'ol/style/Icon';
 import LineString from 'ol/geom/LineString';
 import { Stroke } from 'ol/style';
+import packageIcon from "../../../images/package-icon.png"
 
 // --- Geocoding Helper ---
 async function geocodeLocation(locationName) {
@@ -461,7 +462,7 @@ const shipments = async () => {
               Back to Shipments
             </button>
             <div class="flex items-center gap-6 mb-8">
-              <img src="${shipment.image_url || "/src/images/package-icon.png"}" class="w-20 h-20 rounded-full border-4 border-blue-500 bg-white" alt="Package" />
+              <img src="${shipment.image_url || packageIcon}" class="w-20 h-20 rounded-full border-4 border-blue-500 bg-white" alt="Package" />
               <div>
                 <h2 class="text-2xl font-bold text-white">${shipment.receiver_name}</h2>
                 <p class="text-blue-300">Tracking: ${shipment.tracking_code}</p>
