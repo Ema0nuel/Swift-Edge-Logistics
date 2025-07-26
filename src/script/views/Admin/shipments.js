@@ -8,7 +8,7 @@ import Map from 'ol/Map';
 import View from 'ol/View';
 import TileLayer from 'ol/layer/Tile';
 import OSM from 'ol/source/OSM';
-import { transform, transformExtent } from 'ol/proj'; // <-- FIX: import transformExtent
+import { transform, transformExtent } from 'ol/proj';
 import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
 import VectorLayer from 'ol/layer/Vector';
@@ -17,18 +17,24 @@ import Style from 'ol/style/Style';
 import Icon from 'ol/style/Icon';
 import LineString from 'ol/geom/LineString';
 import { Stroke } from 'ol/style';
-import packageIcon from "../../../images/package-icon.png"
+import packageIcon from "../../../images/package-icon.png";
 
 // --- Geocoding Helper ---
-async function geocodeLocation(locationName) {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(locationName)}`;
-    const response = await fetch(url);
-    const results = await response.json();
-    if (results.length > 0) {
-        // Return [lat, lon] as numbers
-        return [parseFloat(results[0].lat), parseFloat(results[0].lon)];
-    }
-    return null;
+async function reverseGeocode(lat, lon) {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`;
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data && data.display_name) {
+            return data.display_name;
+        }
+    } catch (err) {}
+    return `${lat},${lon}`;
+}
+
+function parseLatLon(location) {
+    let [a, b] = location.split(',').map(Number);
+    return [a, b];
 }
 
 // --- Spinner ---
@@ -78,60 +84,6 @@ async function fetchShipmentDetails(id) {
     return { shipment, updates: updates || [] };
 }
 
-// --- CRUD ---
-async function createShipment(form) {
-    showSpinner();
-    const data = Object.fromEntries(new FormData(form));
-    const trackingCode = "TRK" + Date.now();
-    const { error } = await supabase.from("shipments").insert([{
-        sender_id: data.sender_id,
-        receiver_name: data.receiver_name,
-        receiver_address: data.receiver_address,
-        receiver_phone: data.receiver_phone,
-        origin: data.origin,
-        destination: data.destination,
-        package_description: data.package_description,
-        weight: Number(data.weight) || null,
-        cost: Number(data.cost) || null,
-        status: "processing",
-        tracking_code: trackingCode,
-        image_url: data.image_url || "",
-    }]);
-    hideSpinner();
-    if (error) {
-        toastr.error(error.message || "Failed to create shipment.");
-        return false;
-    }
-    toastr.success("Shipment created!");
-    return true;
-}
-
-async function editShipment(form, shipmentId) {
-    showSpinner();
-    const data = Object.fromEntries(new FormData(form));
-    const updateData = {};
-    if (data.receiver_name) updateData.receiver_name = data.receiver_name;
-    if (data.receiver_address) updateData.receiver_address = data.receiver_address;
-    if (data.receiver_phone) updateData.receiver_phone = data.receiver_phone;
-    if (data.origin) updateData.origin = data.origin;
-    if (data.destination) updateData.destination = data.destination;
-    if (data.package_description) updateData.package_description = data.package_description;
-    if (data.weight !== "") updateData.weight = Number(data.weight);
-    if (data.cost !== "") updateData.cost = Number(data.cost);
-    if (data.image_url) updateData.image_url = data.image_url;
-    const { error } = await supabase
-        .from("shipments")
-        .update(updateData)
-        .eq("id", shipmentId);
-    hideSpinner();
-    if (error) {
-        toastr.error(error.message || "Failed to update shipment.");
-        return false;
-    }
-    toastr.success("Shipment updated!");
-    return true;
-}
-
 async function addLiveTrackingUpdate(shipmentId, location, status, note) {
     showSpinner();
     await supabase.from("tracking_updates").insert([{
@@ -145,18 +97,9 @@ async function addLiveTrackingUpdate(shipmentId, location, status, note) {
 }
 
 // --- Map Logic (OpenLayers) ---
-// Always start from New York warehouse: [40.7127281, -74.0060152]
 const WAREHOUSE_LOCATION = [40.7127281, -74.0060152];
 
-function parseLatLon(location) {
-    // Accepts "lat,lon" or "lon,lat" (try both)
-    let [a, b] = location.split(',').map(Number);
-    // Always treat as lat,lon (Nominatim returns lat,lon)
-    return [a, b];
-}
-
-function renderTrackingMap(containerId, updates) {
-    // Always start with warehouse location
+async function renderTrackingMap(containerId, updates) {
     const points = [
         WAREHOUSE_LOCATION,
         ...updates
@@ -164,7 +107,6 @@ function renderTrackingMap(containerId, updates) {
             .filter(([lat, lon]) => !isNaN(lat) && !isNaN(lon))
     ];
 
-    // Center on last point, or warehouse if only one
     const center = points.length > 1 ? points[points.length - 1] : WAREHOUSE_LOCATION;
     const centerWebMercator = transform([center[1], center[0]], 'EPSG:4326', 'EPSG:3857');
 
@@ -181,7 +123,6 @@ function renderTrackingMap(containerId, updates) {
         })
     });
 
-    // Draw path
     if (points.length > 1) {
         const lineCoords = points.map(([lat, lon]) => transform([lon, lat], 'EPSG:4326', 'EPSG:3857'));
         const line = new Feature({
@@ -195,32 +136,57 @@ function renderTrackingMap(containerId, updates) {
         map.addLayer(vectorLayer);
     }
 
-    // Draw markers
-    points.forEach((pt, idx) => {
+    for (let idx = 0; idx < points.length; idx++) {
+        const pt = points[idx];
+        let popupText = idx === 0 ? "Warehouse (New York)" : `Checkpoint #${idx}`;
+        let locationName = popupText;
+        if (idx > 0) {
+            locationName = await reverseGeocode(pt[0], pt[1]);
+            popupText = `Update: ${locationName}`;
+        }
         const marker = new Feature({
             geometry: new Point(transform([pt[1], pt[0]], 'EPSG:4326', 'EPSG:3857'))
         });
         marker.setStyle(new Style({
             image: new Icon({
                 src: idx === 0
-                    ? "https://cdn-icons-png.flaticon.com/512/684/684908.png" // warehouse icon
+                    ? "https://cdn-icons-png.flaticon.com/512/684/684908.png"
                     : "https://cdn.jsdelivr.net/npm/ol@v7.4.0/examples/data/icon.png",
-                scale: 0.1,
+                scale: idx === 0 ? 0.08 : 0.07,
                 anchor: [0.5, 1]
             })
         }));
+        marker.set('popup', popupText);
         const vectorSource = new VectorSource({ features: [marker] });
         const vectorLayer = new VectorLayer({ source: vectorSource });
         map.addLayer(vectorLayer);
-    });
 
-    // Fit map to all points if more than one
+        map.on('singleclick', function (evt) {
+            map.forEachFeatureAtPixel(evt.pixel, function (feature) {
+                const popup = document.createElement('div');
+                popup.className = 'ol-popup';
+                popup.style.background = '#fff';
+                popup.style.padding = '8px 12px';
+                popup.style.borderRadius = '8px';
+                popup.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+                popup.innerHTML = feature.get('popup');
+                const overlay = document.createElement('div');
+                overlay.style.position = 'absolute';
+                overlay.style.left = evt.pixel[0] + 'px';
+                overlay.style.top = evt.pixel[1] + 'px';
+                overlay.appendChild(popup);
+                document.getElementById(containerId).appendChild(overlay);
+                setTimeout(() => overlay.remove(), 2500);
+            });
+        });
+    }
+
     if (points.length > 1) {
         const extent = [
-            Math.min(...points.map(pt => pt[1])), // min lon
-            Math.min(...points.map(pt => pt[0])), // min lat
-            Math.max(...points.map(pt => pt[1])), // max lon
-            Math.max(...points.map(pt => pt[0]))  // max lat
+            Math.min(...points.map(pt => pt[1])),
+            Math.min(...points.map(pt => pt[0])),
+            Math.max(...points.map(pt => pt[1])),
+            Math.max(...points.map(pt => pt[0]))
         ];
         map.getView().fit(transformExtent(extent, 'EPSG:4326', 'EPSG:3857'), { padding: [40, 40, 40, 40] });
     }
@@ -298,7 +264,7 @@ const shipments = async () => {
               </table>
             </div>
             <div id="createShipmentModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50 flex">
-              <div class="bg-white rounded-xl p-8 w-full max-w-md shadow-lg relative animate-slideIn">
+              <div class="bg-white rounded-xl p-8 w-full max-w-md shadow-lg relative animate-slideIn overflow-auto" style="max-height:90vh;">
                 <button id="closeModalBtn" class="absolute top-4 right-4 text-gray-500 hover:text-red-500 text-xl">×</button>
                 <h2 class="text-2xl font-bold mb-4 text-gray-800">Create Shipment</h2>
                 <form id="createShipmentForm" class="space-y-4">
@@ -330,6 +296,7 @@ const shipments = async () => {
           from { transform: translateY(40px); opacity: 0; }
           to { transform: translateY(0); opacity: 1; }
         }
+        .ol-popup { font-size: 1rem; pointer-events: none; z-index: 1000; }
       </style>
     `;
         document.querySelector("#app").innerHTML = html;
@@ -343,7 +310,7 @@ const shipments = async () => {
         hideSpinner();
         const modalHtml = `
       <div id="editShipmentModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-        <div class="bg-white rounded-xl p-8 w-full max-w-md shadow-lg relative animate-slideIn">
+        <div class="bg-white rounded-xl p-8 w-full max-w-md shadow-lg relative animate-slideIn overflow-auto" style="max-height:90vh;">
           <button id="closeEditModalBtn" class="absolute top-4 right-4 text-gray-500 hover:text-red-500 text-xl">×</button>
           <h2 class="text-2xl font-bold mb-4 text-gray-800">Edit Shipment</h2>
           <form id="editShipmentForm" class="space-y-4">
@@ -383,9 +350,31 @@ const shipments = async () => {
         showSpinner();
         const { shipment, updates } = await fetchShipmentDetails(shipmentId);
         hideSpinner();
+
+        // Decode location names for admin
+        async function getLocationDisplay(location) {
+            if (location && location.match(/^-?\d+\.\d+,-?\d+\.\d+$/)) {
+                const [lat, lon] = parseLatLon(location);
+                return await reverseGeocode(lat, lon);
+            }
+            return location;
+        }
+
+        let historyHtml = "";
+        for (const u of updates) {
+            const locationDisplay = await getLocationDisplay(u.location);
+            historyHtml += `
+                <div class="p-2 rounded bg-gray-100 text-gray-800 flex justify-between items-center mb-1">
+                  <span>${locationDisplay}</span>
+                  <span class="text-blue-600">${u.status}</span>
+                  <span class="text-xs text-gray-400">${dayjs(u.updated_at).format("MMM D, HH:mm")}</span>
+                </div>
+            `;
+        }
+
         const modalHtml = `
       <div id="liveTrackingModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-        <div class="bg-white rounded-xl p-8 w-full max-w-lg shadow-lg relative animate-slideIn">
+        <div class="bg-white rounded-xl p-8 w-full max-w-lg shadow-lg relative animate-slideIn overflow-auto" style="max-height:90vh;">
           <button id="closeLiveTrackingModalBtn" class="absolute top-4 right-4 text-gray-500 hover:text-red-500 text-xl">×</button>
           <h2 class="text-2xl font-bold mb-4 text-gray-800">Live Tracking - ${shipment.tracking_code}</h2>
           <div id="liveMapContainer" style="height: 300px;" class="mb-4 rounded-lg overflow-hidden"></div>
@@ -403,13 +392,7 @@ const shipments = async () => {
           <div class="mt-6">
             <h3 class="text-lg font-bold mb-2 text-gray-800">Tracking History</h3>
             <div class="tracking-history overflow-y-auto max-h-32">
-              ${updates.length ? updates.map(u => `
-                <div class="p-2 rounded bg-gray-100 text-gray-800 flex justify-between items-center mb-1">
-                  <span>${u.location}</span>
-                  <span class="text-blue-600">${u.status}</span>
-                  <span class="text-xs text-gray-400">${dayjs(u.updated_at).format("MMM D, HH:mm")}</span>
-                </div>
-              `).join("") : "<div class='text-gray-400'>No updates.</div>"}
+              ${historyHtml || "<div class='text-gray-400'>No updates.</div>"}
             </div>
           </div>
         </div>
@@ -417,7 +400,6 @@ const shipments = async () => {
     `;
         document.body.insertAdjacentHTML("beforeend", modalHtml);
 
-        // Render map after modal is in DOM
         setTimeout(() => {
             renderTrackingMap('liveMapContainer', updates);
         }, 100);
@@ -432,7 +414,6 @@ const shipments = async () => {
             let locationInput = form.location.value.trim();
             let coords;
             if (!locationInput.match(/^-?\d+\.\d+,-?\d+\.\d+$/)) {
-                // If not lat,lon, treat as place name
                 coords = await geocodeLocation(locationInput);
                 if (!coords) {
                     toastr.error("Location not found!");
@@ -453,6 +434,28 @@ const shipments = async () => {
         showSpinner();
         const { shipment, updates } = await fetchShipmentDetails(shipmentId);
         hideSpinner();
+
+        // Decode location names for admin
+        async function getLocationDisplay(location) {
+            if (location && location.match(/^-?\d+\.\d+,-?\d+\.\d+$/)) {
+                const [lat, lon] = parseLatLon(location);
+                return await reverseGeocode(lat, lon);
+            }
+            return location;
+        }
+
+        let historyHtml = "";
+        for (const u of updates) {
+            const locationDisplay = await getLocationDisplay(u.location);
+            historyHtml += `
+                <div class="p-3 rounded bg-white/5 text-white flex justify-between items-center">
+                    <span>${locationDisplay}</span>
+                    <span class="text-blue-400">${u.status}</span>
+                    <span class="text-xs text-gray-400">${dayjs(u.updated_at).format("MMM D, HH:mm")}</span>
+                </div>
+            `;
+        }
+
         const html = `
       <div class="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-indigo-900 flex">
         ${navbarHtml}
@@ -473,13 +476,7 @@ const shipments = async () => {
             <div class="mb-8">
               <h3 class="text-lg font-bold text-white mb-4">Tracking Updates</h3>
               <div class="space-y-2">
-                ${updates.length ? updates.map(u => `
-                  <div class="p-3 rounded bg-white/5 text-white flex justify-between items-center">
-                    <span>${u.location}</span>
-                    <span class="text-blue-400">${u.status}</span>
-                    <span class="text-xs text-gray-400">${dayjs(u.updated_at).format("MMM D, HH:mm")}</span>
-                  </div>
-                `).join("") : "<div class='text-gray-400'>No updates.</div>"}
+                ${historyHtml || "<div class='text-gray-400'>No updates.</div>"}
               </div>
             </div>
             <div id="detailsMapContainer" style="height: 300px;" class="mb-8 rounded-lg overflow-hidden"></div>
@@ -509,6 +506,8 @@ const shipments = async () => {
         document.getElementById("trackLiveBtnDetails")?.addEventListener("click", () => {
             renderLiveTrackingModal(shipmentId);
         });
+        // Re-activate navbar events for details view
+        navbarEvents();
     }
 
     function mainEvents() {
@@ -574,7 +573,7 @@ const shipments = async () => {
     }
 
     renderMain();
-    return ({ html: "", pageEvents: () => renderMain() })
+    return ({ html: "", pageEvents: () => renderMain() });
 };
 
 export default shipments;
