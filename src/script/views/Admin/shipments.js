@@ -94,18 +94,26 @@ async function fetchShipmentDetails(id) {
         .select("*")
         .eq("shipment_id", id)
         .order("updated_at", { ascending: true });
-    // Get user profile for email
-    let user = null;
+    // Get sender and receiver profiles for email
+    let sender = null, receiver = null;
     if (shipment?.sender_id) {
         const { data: profile } = await supabase
             .from("profiles")
             .select("email, full_name")
             .eq("id", shipment.sender_id)
             .single();
-        user = profile;
+        sender = profile;
+    }
+    if (shipment?.receiver_id) {
+        const { data: profile } = await supabase
+            .from("profiles")
+            .select("email, full_name")
+            .eq("id", shipment.receiver_id)
+            .single();
+        receiver = profile;
     }
     hideSpinner();
-    return { shipment, updates: updates || [], user };
+    return { shipment, updates: updates || [], sender, receiver };
 }
 
 // --- Map Logic (OpenLayers) ---
@@ -206,56 +214,64 @@ async function renderTrackingMap(containerId, updates) {
 
 // --- Email Map Helper ---
 function generateMapImageUrl(lat, lon) {
-    // Use static map API (OpenStreetMap StaticMap or Google Static Maps if you have API key)
-    // Here we use OSM StaticMap for demo
     return `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lon}&zoom=13&size=600x300&markers=${lat},${lon},red-pushpin`;
 }
 
-// --- Add Tracking Update and Send Email ---
+// --- Add Tracking Update and Send Email to Sender & Receiver ---
 async function addLiveTrackingUpdateAndNotify(shipmentId, location, status, note) {
     showSpinner();
-    // Add tracking update
     await supabase.from("tracking_updates").insert([{
         shipment_id: shipmentId,
         location,
         status,
         note,
     }]);
-    // Fetch shipment and user info
-    const { shipment, updates, user } = await fetchShipmentDetails(shipmentId);
+    const { shipment, updates, sender, receiver } = await fetchShipmentDetails(shipmentId);
     hideSpinner();
 
-    // Prepare email
-    if (user?.email) {
-        let locationDisplay = location;
-        let mapImg = "";
-        if (location.match(/^-?\d+\.\d+,-?\d+\.\d+$/)) {
-            const [lat, lon] = parseLatLon(location);
-            locationDisplay = await reverseGeocode(lat, lon);
-            mapImg = `<img src="${generateMapImageUrl(lat, lon)}" alt="Location Map" style="width:100%;max-width:600px;border-radius:8px;margin-top:12px;" />`;
-        }
-        const subject = `Your Package Update: ${shipment.tracking_code}`;
-        const html = `
-            <div style="font-family:Arial,sans-serif;">
-                <h2 style="color:#2d3748;">Swift Edge Logistics - Package Update</h2>
-                <p>Hello ${user.full_name || "Customer"},</p>
-                <p>Your package <b>${shipment.tracking_code}</b> has a new update:</p>
-                <ul>
-                    <li><b>Status:</b> ${status}</li>
-                    <li><b>Location:</b> ${locationDisplay}</li>
-                    <li><b>Note:</b> ${note || "No note"}</li>
-                    <li><b>Time:</b> ${dayjs().format("MMM D, YYYY HH:mm")}</li>
-                </ul>
-                ${mapImg}
-                <p>Track your package anytime at <a href="https://www.swiftedgelogistics.com/track">SwiftEdge Logistics</a>.</p>
-                <p style="margin-top:24px;color:#718096;">Swift Edge Logistics Team</p>
-            </div>
-        `;
+    // Prepare email details
+    let locationDisplay = location;
+    let mapImg = "";
+    let lat = null, lon = null;
+    if (location.match(/^-?\d+\.\d+,-?\d+\.\d+$/)) {
+        [lat, lon] = parseLatLon(location);
+        locationDisplay = await reverseGeocode(lat, lon);
+        mapImg = `<img src="${generateMapImageUrl(lat, lon)}" alt="Location Map" style="width:100%;max-width:600px;border-radius:8px;margin-top:12px;" />`;
+    }
+    const subject = `Package Update: ${shipment.tracking_code}`;
+    const html = `
+        <div style="font-family:Arial,sans-serif;">
+            <h2 style="color:#2d3748;">Swift Edge Logistics - Package Update</h2>
+            <p>Hello,</p>
+            <p>Your package <b>${shipment.tracking_code}</b> (${shipment.package_description}) has a new update:</p>
+            <ul>
+                <li><b>Status:</b> ${status}</li>
+                <li><b>Location:</b> ${locationDisplay}</li>
+                <li><b>Note:</b> ${note || "No note"}</li>
+                <li><b>Time:</b> ${dayjs().format("MMM D, YYYY HH:mm")}</li>
+                <li><b>Receiver:</b> ${shipment.receiver_name} (${shipment.receiver_address})</li>
+            </ul>
+            ${mapImg}
+            <p>Track your package anytime at <a href="https://www.swiftedgelogistics.com/track">SwiftEdge Logistics</a>.</p>
+            <p style="margin-top:24px;color:#718096;">Swift Edge Logistics Team</p>
+        </div>
+    `;
+    // Send to sender
+    if (sender?.email) {
         try {
-            await sendEmail({ to: user.email, subject, html });
-            toastr.success("Email notification sent to user!");
+            await sendEmail({ to: sender.email, subject, html });
+            toastr.success("Email notification sent to sender!");
         } catch (err) {
-            toastr.error("Failed to send email notification.");
+            toastr.error("Failed to send email to sender.");
+        }
+    }
+    // Send to receiver
+    if (receiver?.email) {
+        try {
+            await sendEmail({ to: receiver.email, subject, html });
+            toastr.success("Email notification sent to receiver!");
+        } catch (err) {
+            toastr.error("Failed to send email to receiver.");
         }
     }
     toastr.success("Live tracking updated!");
@@ -338,6 +354,7 @@ const shipments = async () => {
                 <h2 class="text-2xl font-bold mb-4 text-gray-800">Create Shipment</h2>
                 <form id="createShipmentForm" class="space-y-4">
                   <input type="text" name="sender_id" placeholder="Sender User ID" class="input input-bordered w-full py-2 px-4 rounded-lg" required />
+                  <input type="text" name="receiver_id" placeholder="Receiver User ID" class="input input-bordered w-full py-2 px-4 rounded-lg" required />
                   <input type="text" name="receiver_name" placeholder="Receiver Name" class="input input-bordered w-full py-2 px-4 rounded-lg" required />
                   <input type="text" name="receiver_address" placeholder="Receiver Address" class="input input-bordered w-full py-2 px-4 rounded-lg" required />
                   <input type="tel" name="receiver_phone" placeholder="Receiver Phone" class="input input-bordered w-full py-2 px-4 rounded-lg" required />
@@ -420,7 +437,6 @@ const shipments = async () => {
         const { shipment, updates } = await fetchShipmentDetails(shipmentId);
         hideSpinner();
 
-        // Decode location names for admin
         async function getLocationDisplay(location) {
             if (location && location.match(/^-?\d+\.\d+,-?\d+\.\d+$/)) {
                 const [lat, lon] = parseLatLon(location);
@@ -504,7 +520,6 @@ const shipments = async () => {
         const { shipment, updates } = await fetchShipmentDetails(shipmentId);
         hideSpinner();
 
-        // Decode location names for admin
         async function getLocationDisplay(location) {
             if (location && location.match(/^-?\d+\.\d+,-?\d+\.\d+$/)) {
                 const [lat, lon] = parseLatLon(location);
@@ -575,8 +590,57 @@ const shipments = async () => {
         document.getElementById("trackLiveBtnDetails")?.addEventListener("click", () => {
             renderLiveTrackingModal(shipmentId);
         });
-        // Re-activate navbar events for details view
         navbarEvents();
+    }
+
+    async function createShipment(form) {
+        showSpinner();
+        const data = {
+            sender_id: form.sender_id.value.trim(),
+            receiver_id: form.receiver_id.value.trim(),
+            receiver_name: form.receiver_name.value.trim(),
+            receiver_address: form.receiver_address.value.trim(),
+            receiver_phone: form.receiver_phone.value.trim(),
+            origin: form.origin.value.trim(),
+            destination: form.destination.value.trim(),
+            package_description: form.package_description.value.trim(),
+            weight: Number(form.weight.value),
+            cost: Number(form.cost.value),
+            image_url: form.image_url.value.trim(),
+            status: "processing",
+            tracking_code: "TRK" + Math.floor(Math.random() * 1000000)
+        };
+        const { error } = await supabase.from("shipments").insert([data]);
+        hideSpinner();
+        if (error) {
+            toastr.error("Failed to create shipment.");
+            return false;
+        }
+        toastr.success("Shipment created!");
+        return true;
+    }
+
+    async function editShipment(form, shipmentId) {
+        showSpinner();
+        const data = {
+            receiver_name: form.receiver_name.value.trim(),
+            receiver_address: form.receiver_address.value.trim(),
+            receiver_phone: form.receiver_phone.value.trim(),
+            origin: form.origin.value.trim(),
+            destination: form.destination.value.trim(),
+            package_description: form.package_description.value.trim(),
+            weight: Number(form.weight.value),
+            cost: Number(form.cost.value),
+            image_url: form.image_url.value.trim()
+        };
+        const { error } = await supabase.from("shipments").update(data).eq("id", shipmentId);
+        hideSpinner();
+        if (error) {
+            toastr.error("Failed to update shipment.");
+            return false;
+        }
+        toastr.success("Shipment updated!");
+        return true;
     }
 
     function mainEvents() {

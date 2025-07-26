@@ -4,6 +4,7 @@ import { reset } from "../../utils/reset";
 import toastr from "../../utils/toastr";
 import { sendEmail } from "../../utils/send-email";
 import dayjs from "dayjs";
+import userIcon from '../../../images/avatar-default.png'
 
 // --- Spinner ---
 function showSpinner() {
@@ -45,7 +46,7 @@ const notifications = async () => {
             const user = profiles.find(p => p.id === n.user_id) || {};
             return `
               <div class="bg-white/90 rounded-xl shadow-lg p-5 flex items-start gap-4 border border-indigo-100 hover:shadow-xl transition-all">
-                <img src="${user.avatar_url || '/src/images/avatar-default.png'}" class="w-12 h-12 rounded-full border-2 border-indigo-400" alt="User" />
+                <img src="${user.avatar_url || userIcon}" class="w-12 h-12 rounded-full border-2 border-indigo-400" alt="User" />
                 <div class="flex-1">
                   <div class="flex justify-between items-center mb-1">
                     <span class="font-bold text-indigo-700 text-lg">${user.full_name || "Unknown"}</span>
@@ -86,7 +87,7 @@ const notifications = async () => {
             const user = profiles.find(p => p.id === inv.user_id) || {};
             return `
               <div class="bg-white/90 rounded-xl shadow-lg p-5 flex items-start gap-4 border border-indigo-100 hover:shadow-xl transition-all">
-                <img src="${user.avatar_url || '/src/images/avatar-default.png'}" class="w-12 h-12 rounded-full border-2 border-indigo-400" alt="User" />
+                <img src="${user.avatar_url || userIcon }" class="w-12 h-12 rounded-full border-2 border-indigo-400" alt="User" />
                 <div class="flex-1">
                   <div class="flex justify-between items-center mb-1">
                     <span class="font-bold text-indigo-700 text-lg">${user.full_name || "Unknown"}</span>
