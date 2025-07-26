@@ -1,7 +1,7 @@
 import { logout } from '../functions/checkSession.js';
 import { reset } from '../../../utils/reset.js';
 
-const logo = "/src/images/logo.jpg";
+import logo from "../../../../images/logo.jpg";
 
 const adminLinks = [
   { name: "Dashboard", href: "/admin/dashboard", icon: "fa-chart-bar" },

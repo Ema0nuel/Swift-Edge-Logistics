@@ -32,6 +32,19 @@ async function reverseGeocode(lat, lon) {
     return `${lat},${lon}`;
 }
 
+// --- Geocode Helper: Convert location name to lat/lon ---
+async function geocodeLocation(locationName) {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(locationName)}&limit=1`;
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data && data.length > 0) {
+            return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+        }
+    } catch (err) {}
+    return null;
+}
+
 function parseLatLon(location) {
     let [a, b] = location.split(',').map(Number);
     return [a, b];
