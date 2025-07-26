@@ -21,4 +21,4 @@ export async function sendEmail({ to, subject, html }) {
   }
   if (!data.success) throw new Error(data.error || 'Failed to send email');
   return data.result;
-}
+} // Send Email 
