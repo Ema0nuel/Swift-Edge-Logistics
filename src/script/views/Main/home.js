@@ -6,6 +6,20 @@ import { reset } from "../../utils/reset";
 import { supabase } from "../../utils/supabaseClient";
 import toastr from "../../utils/toastr";
 import dayjs from "dayjs";
+import 'ol/ol.css';
+import Map from 'ol/Map';
+import View from 'ol/View';
+import TileLayer from 'ol/layer/Tile';
+import OSM from 'ol/source/OSM';
+import { transform, transformExtent } from 'ol/proj';
+import Feature from 'ol/Feature';
+import Point from 'ol/geom/Point';
+import VectorLayer from 'ol/layer/Vector';
+import VectorSource from 'ol/source/Vector';
+import Style from 'ol/style/Style';
+import Icon from 'ol/style/Icon';
+import LineString from 'ol/geom/LineString';
+import { Stroke } from 'ol/style';
 
 // --- Geocoding Helper ---
 async function reverseGeocode(lat, lon) {
@@ -26,157 +40,114 @@ function parseLatLon(location) {
   return [a, b];
 }
 
-const logoWallImages = [
-  "https://www.shipbob.com/wp-content/uploads/2023/10/2f854a399a4d8ac1b7b1aa7a78836549.png",
-  "https://www.shipbob.com/wp-content/uploads/2024/11/414d49e28e8fa74ca8e7604493adb78b.svg",
-  "https://www.shipbob.com/wp-content/uploads/2024/11/58136c17b9cbdfa9a8d9c4e3e6f597f4.svg",
-  "https://www.shipbob.com/wp-content/uploads/2022/04/Chamberlain_Coffee_Logo.png",
-  "https://www.shipbob.com/wp-content/uploads/2023/10/72ed96bf6febf9764415855386810276.png",
-  "https://www.shipbob.com/wp-content/uploads/2023/10/da85ba7fb0752aeb5d19bd292d70a232.png",
-  "https://www.shipbob.com/wp-content/uploads/2022/04/100_Thieveslogo_profile-bw.png",
-  "https://www.shipbob.com/wp-content/uploads/2024/11/2afc122e89b8fc6348a4d76fb63d5ef5.svg",
-  "https://www.shipbob.com/wp-content/uploads/2024/12/a117347e92ac840408db273df2792a98.png"
-];
-
-const serviceGrid = [
-  { icon: "14003308f2bae5d8809dc2c8facd9b9d", title: "Inventory Distribution", desc: "Place inventory across different regions via one hub, with automated replenishment." },
-  { icon: "3c5e2d0e5c7677643fc0807fcf2b5e8b", title: "Order Fulfillment", desc: "Best-in-class picking, packing, shipping, returns, and more across our network." },
-  { icon: "bfea635b292017e2ece2b2dfdf8f3e12", title: "2-Day Shipping", desc: "Offer 2-day shipping for all sales channels across the country." },
-  { icon: "6e897a380658d8bcaeb45bb3ec336868", title: "Customized Unboxings", desc: "Create an unforgettable unboxing experience to help your brand stand out." },
-  { icon: "5d723db019cdcfc2c174abc7a1707596", title: "Warehouse Management", desc: "Track inventory across warehouses in real time and set reorder alerts." },
-  { icon: "875a17ab7cb2afd1ac99ec61b586a6d5", title: "International Shipping", desc: "Ship to 250+ destinations with standard and expedited shipping options." },
-  { icon: "32045388caf6e1a09c005e99943a08d0", title: "Global Fulfillment", desc: "Expand and scale across the world for an optimized supply chain." },
-  { icon: "48f93226bd4bf7e47c8b12406037cd36", title: "B2B Fulfillment", desc: "Fulfill for retailers including automated EDI, online marketplaces, and more." },
-  { icon: "e874fea6533d34d38af5ea24f6ab659f", title: "Integrations", desc: "Connect your ecommerce platform, sales channels, ERP, and other tools." }
-];
-
-const industryGrid = [
-  {
-    title: "Health & Wellness",
-    img: "6600337fbbec17538ad30748234b6bec.png",
-    brands: [
-      "a2a5c4a45858492d8898ee355f7ef2f9-1.svg",
-      "6b9d6393009bf958b7f446c0e0538448-e1742835455805.png",
-      "4ab8b0fe910c5c38961854af99b5a41e.png",
-      "6ce43bdd6d2f5c6d17bbfa078177697f.png"
+// --- Map Logic (OpenLayers) ---
+const WAREHOUSE_LOCATION = [40.7127281, -74.0060152];
+async function renderTrackingMap(containerId, updates) {
+  const points = [
+    WAREHOUSE_LOCATION,
+    ...updates
+      .map(u => parseLatLon(u.location))
+      .filter(([lat, lon]) => !isNaN(lat) && !isNaN(lon))
+  ];
+  const center = points.length > 1 ? points[points.length - 1] : WAREHOUSE_LOCATION;
+  const centerWebMercator = transform([center[1], center[0]], 'EPSG:4326', 'EPSG:3857');
+  document.getElementById(containerId).innerHTML = "";
+  const map = new Map({
+    target: containerId,
+    layers: [
+      new TileLayer({ source: new OSM() })
     ],
-    link: "/industries/health-wellness"
-  },
-  {
-    title: "Beauty & Personal Care",
-    img: "8124858de9ab1a89f2ae8a3e3c2ea143.png",
-    brands: [
-      "20a4ca28de3eddf4ae11ece800484cc8.png",
-      "bbbc258f975e6acedd7d6857c581caa0.svg",
-      "72ed96bf6febf9764415855386810276.png",
-      "1eb602888f59ef3854e30accce66318a.png"
-    ],
-    link: "/industries/beauty-personal-care"
-  },
-  {
-    title: "Food & Beverage",
-    img: "51b534faafb58f487d6ee21745fa0189.png",
-    brands: [
-      "e83fe1b887dbb8776da2ee1cbc51c99d.png",
-      "883097f05ff2256dc7f6c485e28a6a59.png",
-      "ae0168cea02b2138502219f0cef49135.png",
-      "f9ece484519033e0ef034eb670fd6bae.png"
-    ],
-    link: "/industries/food-beverage"
-  },
-  {
-    title: "Apparel & Accessories",
-    img: "7f5441c39a3485710c7c3e25ba325651.png",
-    brands: [
-      "100_Thieveslogo_profile-bw.png",
-      "440c5b33660cf93ef9955c5383b67870.png",
-      "287425602fdf77753fc5f6476d8472da.png",
-      "dba488b00cfa177c21e107dbd5738596.png"
-    ],
-    link: "/industries/apparel-accessories"
+    view: new View({
+      center: centerWebMercator,
+      zoom: 10
+    })
+  });
+  if (points.length > 1) {
+    const lineCoords = points.map(([lat, lon]) => transform([lon, lat], 'EPSG:4326', 'EPSG:3857'));
+    const line = new Feature({
+      geometry: new LineString(lineCoords)
+    });
+    line.setStyle(new Style({
+      stroke: new Stroke({ color: '#4285f4', width: 3 })
+    }));
+    const vectorSource = new VectorSource({ features: [line] });
+    const vectorLayer = new VectorLayer({ source: vectorSource });
+    map.addLayer(vectorLayer);
   }
-];
-
-const testimonials = [
-  {
-    quote: "Swift Logistics has transformed our delivery experience. Our customers are happier and our team is more efficient.",
-    name: "Brian Herbstreit",
-    position: "Owner, Nothing Bundt Cakes",
-    logo: "https://www.dropoff.com/wp-content/uploads/2023/01/Logo_5.png",
-    photo: "https://www.dropoff.com/wp-content/uploads/2022/11/S_3.png"
-  },
-  {
-    quote: "We scaled our business with Swift Logistics and saw a 40% reduction in fulfillment costs.",
-    name: "Ali Shahid",
-    position: "COO, Our Place",
-    logo: "https://www.shipbob.com/wp-content/uploads/2024/11/58136c17b9cbdfa9a8d9c4e3e6f597f4.svg",
-    photo: "https://www.shipbob.com/wp-content/uploads/2024/11/58136c17b9cbdfa9a8d9c4e3e6f597f4.svg"
-  },
-  {
-    quote: "Swift Logistics offers the best support and reliability for our growing brand.",
-    name: "Stephanie Lee",
-    position: "COO, PetLab Co.",
-    logo: "https://www.shipbob.com/wp-content/uploads/2024/11/2afc122e89b8fc6348a4d76fb63d5ef5-1.svg",
-    photo: "https://www.shipbob.com/wp-content/uploads/2024/11/2afc122e89b8fc6348a4d76fb63d5ef5-1.svg"
-  }
-];
-
-// Animation and Tab Logic
-function animateLogoWall() {
-  const wall = document.querySelector('.animated-logo-wall-track');
-  if (!wall) return;
-  let scrollAmount = 0;
-  function step() {
-    scrollAmount += 0.5;
-    wall.style.transform = `translateX(-${scrollAmount}px)`;
-    if (scrollAmount > wall.scrollWidth / 2) scrollAmount = 0;
-    requestAnimationFrame(step);
-  }
-  step();
-}
-
-// --- Track Product Logic ---
-async function fetchShipment(trackingId) {
-  try {
-    const { data: shipment, error } = await supabase
-      .from("shipments")
-      .select("*")
-      .eq("tracking_code", trackingId)
-      .single();
-
-    if (error || !shipment) {
-      toastr.error("Tracking ID not found.");
-      return null;
+  for (let idx = 0; idx < points.length; idx++) {
+    const pt = points[idx];
+    let popupText = idx === 0 ? "Warehouse (New York)" : `Checkpoint #${idx}`;
+    let locationName = popupText;
+    if (idx > 0) {
+      locationName = await reverseGeocode(pt[0], pt[1]);
+      popupText = `Update: ${locationName}`;
     }
-
-    const { data: updates } = await supabase
-      .from("tracking_updates")
-      .select("*")
-      .eq("shipment_id", shipment.id)
-      .order("updated_at", { ascending: true });
-
-    shipment.updates = updates || [];
-    return shipment;
-  } catch (err) {
-    toastr.error("Error fetching product.");
-    return null;
+    const marker = new Feature({
+      geometry: new Point(transform([pt[1], pt[0]], 'EPSG:4326', 'EPSG:3857'))
+    });
+    marker.setStyle(new Style({
+      image: new Icon({
+        src: idx === 0
+          ? "https://cdn-icons-png.flaticon.com/512/684/684908.png"
+          : "https://cdn.jsdelivr.net/npm/ol@v7.4.0/examples/data/icon.png",
+        scale: idx === 0 ? 0.08 : 0.07,
+        anchor: [0.5, 1]
+      })
+    }));
+    marker.set('popup', popupText);
+    const vectorSource = new VectorSource({ features: [marker] });
+    const vectorLayer = new VectorLayer({ source: vectorSource });
+    map.addLayer(vectorLayer);
+    map.on('singleclick', function (evt) {
+      map.forEachFeatureAtPixel(evt.pixel, function (feature) {
+        const popup = document.createElement('div');
+        popup.className = 'ol-popup';
+        popup.style.background = '#fff';
+        popup.style.padding = '8px 12px';
+        popup.style.borderRadius = '8px';
+        popup.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+        popup.innerHTML = feature.get('popup');
+        const overlay = document.createElement('div');
+        overlay.style.position = 'absolute';
+        overlay.style.left = evt.pixel[0] + 'px';
+        overlay.style.top = evt.pixel[1] + 'px';
+        overlay.appendChild(popup);
+        document.getElementById(containerId).appendChild(overlay);
+        setTimeout(() => overlay.remove(), 2500);
+      });
+    });
+  }
+  if (points.length > 1) {
+    const extent = [
+      Math.min(...points.map(pt => pt[1])),
+      Math.min(...points.map(pt => pt[0])),
+      Math.max(...points.map(pt => pt[1])),
+      Math.max(...points.map(pt => pt[0]))
+    ];
+    map.getView().fit(transformExtent(extent, 'EPSG:4326', 'EPSG:3857'), { padding: [40, 40, 40, 40] });
   }
 }
 
-async function renderTrackingResult(shipment) {
-  const container = document.getElementById("tracking-result-container");
-  if (!container) return;
-  if (!shipment) {
-    container.innerHTML = `
-      <div class="bg-red-100 dark:bg-red-900 border border-red-400 text-red-700 dark:text-red-300 px-4 py-3 rounded-md mb-6" role="alert">
-        <p class="font-bold">Error!</p>
-        <p class="text-sm">Tracking ID not found. Please try again.</p>
-      </div>
-    `;
-    return;
-  }
+// --- Spinner ---
+function showSpinner() {
+  if (document.getElementById("trackSpinner")) return;
+  const spinner = document.createElement("div");
+  spinner.id = "trackSpinner";
+  spinner.innerHTML = `
+    <div class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+      <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-500"></div>
+    </div>
+  `;
+  document.body.appendChild(spinner);
+}
+function hideSpinner() {
+  document.getElementById("trackSpinner")?.remove();
+}
 
-  // Decode location names for history
+// --- Modal ---
+async function renderTrackingModal(shipment) {
+  hideSpinner();
+  document.getElementById("trackingModal")?.remove();
   let historyHtml = "";
   for (const item of shipment.updates) {
     let locationDisplay = item.location;
@@ -185,18 +156,15 @@ async function renderTrackingResult(shipment) {
       locationDisplay = await reverseGeocode(lat, lon);
     }
     historyHtml += `
-      <li class="flex items-start">
-        <span class="text-indigo-500 dark:text-indigo-300 mr-3">&#x2022;</span>
+      <li class="flex flex-col md:flex-row items-start gap-2 mb-2">
         <div>
-          <span class="font-medium">${dayjs(item.updated_at).format(
-            "MMM D, HH:mm"
-          )}:</span> ${item.status} - ${locationDisplay} <span class="text-xs text-text-subtle">${item.note || ""}</span>
+          <span class="font-medium">${dayjs(item.updated_at).format("MMM D, HH:mm")}:</span>
+          ${item.status} - ${locationDisplay}
+          <span class="text-xs text-text-subtle">${item.note || ""}</span>
         </div>
       </li>
     `;
   }
-
-  // Current location
   let currentLocation = shipment.origin;
   if (shipment.updates.length) {
     const lastUpdate = shipment.updates[shipment.updates.length - 1];
@@ -207,23 +175,64 @@ async function renderTrackingResult(shipment) {
       currentLocation = lastUpdate.location;
     }
   }
-
-  container.innerHTML = `
-    <div class="bg-gray-50 dark:bg-gray-700 p-6 rounded-lg shadow-inner mb-4">
-      <h3 class="text-2xl font-semibold mb-4 text-gray-700 dark:text-gray-300">Tracking Details</h3>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-lg">
-        <p><strong>Status:</strong> <span class="font-semibold">${shipment.status}</span></p>
-        <p><strong>Current Location:</strong> ${currentLocation}</p>
-        <p><strong>Tracking ID:</strong> <span class="font-mono">${shipment.tracking_code}</span></p>
-      </div>
-      <div class="mt-6">
-        <h4 class="text-xl font-semibold mb-3 text-gray-700 dark:text-gray-300">Tracking History</h4>
-        <ul class="space-y-2">
-          ${historyHtml}
-        </ul>
+  const modalHtml = `
+    <div id="trackingModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+      <div class="bg-white dark:bg-gray-800 rounded-xl p-8 w-full max-w-2xl shadow-lg relative animate-slideIn overflow-auto" style="max-height:90vh;">
+        <button id="closeTrackingModalBtn" class="absolute top-4 right-4 text-gray-500 hover:text-red-500 text-xl">×</button>
+        <h2 class="text-2xl font-bold mb-4 text-gray-800 dark:text-gray-100">Tracking Details - ${shipment.tracking_code}</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-lg mb-4">
+          <p><strong>Status:</strong> <span class="font-semibold">${shipment.status}</span></p>
+          <p><strong>Current Location:</strong> ${currentLocation}</p>
+          <p><strong>Tracking ID:</strong> <span class="font-mono">${shipment.tracking_code}</span></p>
+        </div>
+        <div id="modalMapContainer" style="height: 350px;" class="mb-6 rounded-lg overflow-hidden"></div>
+        <div>
+          <h4 class="text-xl font-semibold mb-3 text-gray-800 dark:text-gray-100">Tracking History</h4>
+          <ul class="space-y-2">${historyHtml}</ul>
+        </div>
       </div>
     </div>
+    <style>
+      .animate-slideIn { animation: slideIn 0.4s cubic-bezier(.4,0,.2,1); }
+      @keyframes slideIn {
+        from { transform: translateY(40px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+      .ol-popup { font-size: 1rem; pointer-events: none; z-index: 1000; }
+    </style>
   `;
+  document.body.insertAdjacentHTML("beforeend", modalHtml);
+  setTimeout(() => {
+    renderTrackingMap('modalMapContainer', shipment.updates);
+  }, 100);
+  document.getElementById("closeTrackingModalBtn")?.addEventListener("click", () => {
+    document.getElementById("trackingModal")?.remove();
+  });
+}
+
+// --- Track Product Logic ---
+async function fetchShipment(trackingId) {
+  try {
+    const { data: shipment, error } = await supabase
+      .from("shipments")
+      .select("*")
+      .eq("tracking_code", trackingId)
+      .single();
+    if (error || !shipment) {
+      toastr.error("Tracking ID not found.");
+      return null;
+    }
+    const { data: updates } = await supabase
+      .from("tracking_updates")
+      .select("*")
+      .eq("shipment_id", shipment.id)
+      .order("updated_at", { ascending: true });
+    shipment.updates = updates || [];
+    return shipment;
+  } catch (err) {
+    toastr.error("Error fetching product.");
+    return null;
+  }
 }
 
 const home = () => {
@@ -235,16 +244,6 @@ const home = () => {
     navbarEvents();
     animateLogoWall();
 
-    // Testimonial carousel logic (simple fade for demo)
-    let idx = 0;
-    const items = document.querySelectorAll('.testimonial-item');
-    if (items.length > 0) {
-      setInterval(() => {
-        items.forEach((el, i) => el.classList.toggle('hidden', i !== idx));
-        idx = (idx + 1) % items.length;
-      }, 6000);
-    }
-
     // Track Product Form Logic
     const form = document.getElementById("hero-track-form");
     if (form) {
@@ -255,10 +254,14 @@ const home = () => {
           toastr.warning("Please enter a tracking ID.");
           return;
         }
-        document.getElementById("tracking-result-container").innerHTML =
-          '<div class="text-center py-8 text-accent animate-pulse">Loading...</div>';
+        showSpinner();
         const shipment = await fetchShipment(trackingId);
-        await renderTrackingResult(shipment);
+        if (shipment) {
+          await renderTrackingModal(shipment);
+        } else {
+          hideSpinner();
+          toastr.error("Tracking ID not found.");
+        }
       });
     }
   }
@@ -294,8 +297,6 @@ const home = () => {
                   Track
                 </button>
               </form>
-              <div id="tracking-result-container" class="w-full max-w-xl mx-auto"></div>
-              <a href="/plans" data-nav class="inline-block px-6 py-3 rounded bg-accent text-primary font-semibold shadow hover:bg-accent-soft transition-colors mt-6">Talk To An Expert</a>
             </div>
           </section>
           <!-- Quick Links -->
