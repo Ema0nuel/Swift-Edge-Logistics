@@ -3,8 +3,29 @@ import Navbar from "/src/script/components/navbar";
 import swiftLogoLight from "/src/images/logo.png";
 import swiftLogoDark from "/src/images/logo.jpg";
 import { reset } from "../../utils/reset";
+import { supabase } from "../../utils/supabaseClient";
+import toastr from "../../utils/toastr";
+import dayjs from "dayjs";
 
-// Dynamic Data
+// --- Geocoding Helper ---
+async function reverseGeocode(lat, lon) {
+  const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`;
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+    if (data && data.display_name) {
+      return data.display_name;
+    }
+  } catch (err) {}
+  return `${lat},${lon}`;
+}
+
+// --- Parse lat/lon from string ---
+function parseLatLon(location) {
+  let [a, b] = location.split(',').map(Number);
+  return [a, b];
+}
+
 const logoWallImages = [
   "https://www.shipbob.com/wp-content/uploads/2023/10/2f854a399a4d8ac1b7b1aa7a78836549.png",
   "https://www.shipbob.com/wp-content/uploads/2024/11/414d49e28e8fa74ca8e7604493adb78b.svg",
@@ -114,14 +135,106 @@ function animateLogoWall() {
   step();
 }
 
+// --- Track Product Logic ---
+async function fetchShipment(trackingId) {
+  try {
+    const { data: shipment, error } = await supabase
+      .from("shipments")
+      .select("*")
+      .eq("tracking_code", trackingId)
+      .single();
+
+    if (error || !shipment) {
+      toastr.error("Tracking ID not found.");
+      return null;
+    }
+
+    const { data: updates } = await supabase
+      .from("tracking_updates")
+      .select("*")
+      .eq("shipment_id", shipment.id)
+      .order("updated_at", { ascending: true });
+
+    shipment.updates = updates || [];
+    return shipment;
+  } catch (err) {
+    toastr.error("Error fetching product.");
+    return null;
+  }
+}
+
+async function renderTrackingResult(shipment) {
+  const container = document.getElementById("tracking-result-container");
+  if (!container) return;
+  if (!shipment) {
+    container.innerHTML = `
+      <div class="bg-red-100 dark:bg-red-900 border border-red-400 text-red-700 dark:text-red-300 px-4 py-3 rounded-md mb-6" role="alert">
+        <p class="font-bold">Error!</p>
+        <p class="text-sm">Tracking ID not found. Please try again.</p>
+      </div>
+    `;
+    return;
+  }
+
+  // Decode location names for history
+  let historyHtml = "";
+  for (const item of shipment.updates) {
+    let locationDisplay = item.location;
+    if (item.location && item.location.match(/^-?\d+\.\d+,-?\d+\.\d+$/)) {
+      const [lat, lon] = parseLatLon(item.location);
+      locationDisplay = await reverseGeocode(lat, lon);
+    }
+    historyHtml += `
+      <li class="flex items-start">
+        <span class="text-indigo-500 dark:text-indigo-300 mr-3">&#x2022;</span>
+        <div>
+          <span class="font-medium">${dayjs(item.updated_at).format(
+            "MMM D, HH:mm"
+          )}:</span> ${item.status} - ${locationDisplay} <span class="text-xs text-text-subtle">${item.note || ""}</span>
+        </div>
+      </li>
+    `;
+  }
+
+  // Current location
+  let currentLocation = shipment.origin;
+  if (shipment.updates.length) {
+    const lastUpdate = shipment.updates[shipment.updates.length - 1];
+    if (lastUpdate.location && lastUpdate.location.match(/^-?\d+\.\d+,-?\d+\.\d+$/)) {
+      const [lat, lon] = parseLatLon(lastUpdate.location);
+      currentLocation = await reverseGeocode(lat, lon);
+    } else if (lastUpdate.location) {
+      currentLocation = lastUpdate.location;
+    }
+  }
+
+  container.innerHTML = `
+    <div class="bg-gray-50 dark:bg-gray-700 p-6 rounded-lg shadow-inner mb-4">
+      <h3 class="text-2xl font-semibold mb-4 text-gray-700 dark:text-gray-300">Tracking Details</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-lg">
+        <p><strong>Status:</strong> <span class="font-semibold">${shipment.status}</span></p>
+        <p><strong>Current Location:</strong> ${currentLocation}</p>
+        <p><strong>Tracking ID:</strong> <span class="font-mono">${shipment.tracking_code}</span></p>
+      </div>
+      <div class="mt-6">
+        <h4 class="text-xl font-semibold mb-3 text-gray-700 dark:text-gray-300">Tracking History</h4>
+        <ul class="space-y-2">
+          ${historyHtml}
+        </ul>
+      </div>
+    </div>
+  `;
+}
+
 const home = () => {
-  reset('Swift Edge Logistics')
+  reset('Swift Edge Logistics');
   const { html: navbarHtml, pageEvents: navbarEvents } = Navbar();
   const { html: footerHtml } = Footer();
 
   function pageEvents() {
     navbarEvents();
     animateLogoWall();
+
     // Testimonial carousel logic (simple fade for demo)
     let idx = 0;
     const items = document.querySelectorAll('.testimonial-item');
@@ -131,6 +244,23 @@ const home = () => {
         idx = (idx + 1) % items.length;
       }, 6000);
     }
+
+    // Track Product Form Logic
+    const form = document.getElementById("hero-track-form");
+    if (form) {
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const trackingId = document.getElementById("hero-tracking-id-input").value.trim().toUpperCase();
+        if (!trackingId) {
+          toastr.warning("Please enter a tracking ID.");
+          return;
+        }
+        document.getElementById("tracking-result-container").innerHTML =
+          '<div class="text-center py-8 text-accent animate-pulse">Loading...</div>';
+        const shipment = await fetchShipment(trackingId);
+        await renderTrackingResult(shipment);
+      });
+    }
   }
 
   return {
@@ -138,7 +268,7 @@ const home = () => {
       <div class="flex flex-col min-h-screen bg-background-light dark:bg-background-dark text-text-dark dark:text-text-light font-sans">
         ${navbarHtml}
         <main id="wcag-main-content" class="flex-1 flex flex-col justify-start items-stretch px-2 md:px-0">
-          <!-- Hero Banner -->
+          <!-- Hero Banner with Track Products -->
           <section class="relative w-full bg-background-light dark:bg-background-dark mb-24">
             <picture>
               <source srcset="https://www.dhl.com/content/dam/dhl/global/core/images/marketing-stage-2730x1120/africa-core-homepage-banner.web.1920.600.png, https://www.dhl.com/content/dam/dhl/global/core/images/marketing-stage-2730x1120/africa-core-homepage-banner.web.3840.1200.png 2x" media="(min-width: 1365px)">
@@ -151,7 +281,21 @@ const home = () => {
               <img src="${swiftLogoDark}" alt="SwiftEdge Logo" class="h-16 mb-4 hidden dark:block" />
               <h1 class="text-4xl md:text-5xl font-bold text-primary dark:text-accent mb-4 pt-16 md:pt-0">SwiftEdge Logistics</h1>
               <p class="text-lg md:text-xl text-text-light mb-6">Industry Leading Same-Day Delivery Services</p>
-              <a href="/plans" data-nav class="inline-block px-6 py-3 rounded bg-accent text-primary font-semibold shadow hover:bg-accent-soft transition-colors">Talk To An Expert</a>
+              <form id="hero-track-form" class="flex flex-col md:flex-row gap-4 items-center justify-center mb-4 w-full max-w-xl mx-auto">
+                <input
+                  type="text"
+                  id="hero-tracking-id-input"
+                  placeholder="Enter Tracking ID (e.g., TRK123456)"
+                  class="flex-grow p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  required
+                />
+                <button type="submit"
+                  class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-md transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50">
+                  Track
+                </button>
+              </form>
+              <div id="tracking-result-container" class="w-full max-w-xl mx-auto"></div>
+              <a href="/plans" data-nav class="inline-block px-6 py-3 rounded bg-accent text-primary font-semibold shadow hover:bg-accent-soft transition-colors mt-6">Talk To An Expert</a>
             </div>
           </section>
           <!-- Quick Links -->
@@ -336,8 +480,8 @@ const home = () => {
               <h2 class="text-2xl md:text-3xl font-bold mb-6">Trusted By 270+ Global Brands</h2>
               <div class="flex flex-wrap justify-center gap-6">
                 ${[
-        "quest.png", "sprinkles.png", "labcorp-2.png", "american-red-cross-2.png", "mckesson.png", "holt.png", "texas-health.png", "kpmg.png", "helix.png", "ricon.png", "neiman.png", "susie-cackes.png"
-      ].map((img, i) => `
+      "quest.png", "sprinkles.png", "labcorp-2.png", "american-red-cross-2.png", "mckesson.png", "holt.png", "texas-health.png", "kpmg.png", "helix.png", "ricon.png", "neiman.png", "susie-cackes.png"
+    ].map((img, i) => `
                   <img src="https://www.dropoff.com/wp-content/themes/bb-theme-child/media/clients-logos-svg/${img}" alt="brand ${i}" class="h-12">
                 `).join('')}
               </div>

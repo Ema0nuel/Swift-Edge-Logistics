@@ -3,6 +3,7 @@ import Navbar from "./components/navbar.js";
 import { reset } from "../../utils/reset.js";
 import dayjs from "dayjs";
 import toastr from "../../utils/toastr";
+import { sendEmail } from "../../utils/send-email";
 import 'ol/ol.css';
 import Map from 'ol/Map';
 import View from 'ol/View';
@@ -93,20 +94,18 @@ async function fetchShipmentDetails(id) {
         .select("*")
         .eq("shipment_id", id)
         .order("updated_at", { ascending: true });
+    // Get user profile for email
+    let user = null;
+    if (shipment?.sender_id) {
+        const { data: profile } = await supabase
+            .from("profiles")
+            .select("email, full_name")
+            .eq("id", shipment.sender_id)
+            .single();
+        user = profile;
+    }
     hideSpinner();
-    return { shipment, updates: updates || [] };
-}
-
-async function addLiveTrackingUpdate(shipmentId, location, status, note) {
-    showSpinner();
-    await supabase.from("tracking_updates").insert([{
-        shipment_id: shipmentId,
-        location,
-        status,
-        note,
-    }]);
-    hideSpinner();
-    toastr.success("Live tracking updated!");
+    return { shipment, updates: updates || [], user };
 }
 
 // --- Map Logic (OpenLayers) ---
@@ -203,6 +202,63 @@ async function renderTrackingMap(containerId, updates) {
         ];
         map.getView().fit(transformExtent(extent, 'EPSG:4326', 'EPSG:3857'), { padding: [40, 40, 40, 40] });
     }
+}
+
+// --- Email Map Helper ---
+function generateMapImageUrl(lat, lon) {
+    // Use static map API (OpenStreetMap StaticMap or Google Static Maps if you have API key)
+    // Here we use OSM StaticMap for demo
+    return `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lon}&zoom=13&size=600x300&markers=${lat},${lon},red-pushpin`;
+}
+
+// --- Add Tracking Update and Send Email ---
+async function addLiveTrackingUpdateAndNotify(shipmentId, location, status, note) {
+    showSpinner();
+    // Add tracking update
+    await supabase.from("tracking_updates").insert([{
+        shipment_id: shipmentId,
+        location,
+        status,
+        note,
+    }]);
+    // Fetch shipment and user info
+    const { shipment, updates, user } = await fetchShipmentDetails(shipmentId);
+    hideSpinner();
+
+    // Prepare email
+    if (user?.email) {
+        let locationDisplay = location;
+        let mapImg = "";
+        if (location.match(/^-?\d+\.\d+,-?\d+\.\d+$/)) {
+            const [lat, lon] = parseLatLon(location);
+            locationDisplay = await reverseGeocode(lat, lon);
+            mapImg = `<img src="${generateMapImageUrl(lat, lon)}" alt="Location Map" style="width:100%;max-width:600px;border-radius:8px;margin-top:12px;" />`;
+        }
+        const subject = `Your Package Update: ${shipment.tracking_code}`;
+        const html = `
+            <div style="font-family:Arial,sans-serif;">
+                <h2 style="color:#2d3748;">Swift Edge Logistics - Package Update</h2>
+                <p>Hello ${user.full_name || "Customer"},</p>
+                <p>Your package <b>${shipment.tracking_code}</b> has a new update:</p>
+                <ul>
+                    <li><b>Status:</b> ${status}</li>
+                    <li><b>Location:</b> ${locationDisplay}</li>
+                    <li><b>Note:</b> ${note || "No note"}</li>
+                    <li><b>Time:</b> ${dayjs().format("MMM D, YYYY HH:mm")}</li>
+                </ul>
+                ${mapImg}
+                <p>Track your package anytime at <a href="https://www.swiftedgelogistics.com/track">SwiftEdge Logistics</a>.</p>
+                <p style="margin-top:24px;color:#718096;">Swift Edge Logistics Team</p>
+            </div>
+        `;
+        try {
+            await sendEmail({ to: user.email, subject, html });
+            toastr.success("Email notification sent to user!");
+        } catch (err) {
+            toastr.error("Failed to send email notification.");
+        }
+    }
+    toastr.success("Live tracking updated!");
 }
 
 // --- Main UI ---
@@ -436,7 +492,7 @@ const shipments = async () => {
             }
             const status = form.status.value;
             const note = form.note.value.trim();
-            await addLiveTrackingUpdate(shipmentId, locationInput, status, note);
+            await addLiveTrackingUpdateAndNotify(shipmentId, locationInput, status, note);
             document.getElementById("liveTrackingModal")?.remove();
             shipmentsList = await fetchShipments();
             renderMain();
@@ -554,7 +610,7 @@ const shipments = async () => {
             });
             row.querySelector(".approveShipmentBtn")?.addEventListener("click", async (e) => {
                 e.stopPropagation();
-                await addLiveTrackingUpdate(shipmentId, `${WAREHOUSE_LOCATION[0]},${WAREHOUSE_LOCATION[1]}`, "approved", "Approved by admin");
+                await addLiveTrackingUpdateAndNotify(shipmentId, `${WAREHOUSE_LOCATION[0]},${WAREHOUSE_LOCATION[1]}`, "approved", "Approved by admin");
                 shipmentsList = await fetchShipments();
                 renderMain();
             });
