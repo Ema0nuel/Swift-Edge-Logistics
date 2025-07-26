@@ -2,7 +2,7 @@ import { reset } from "../../utils/reset.js";
 import { verifyCredentials, setAdminSession } from "../../utils/auth.js";
 import toastr from "../../utils/toastr.js";
 
-import LOGO_URL from "/src/images/logo.jpg";
+import LOGO_URL from "../../../images/logo.jpg";
 
 const login = () => {
   reset("Admin Login");
