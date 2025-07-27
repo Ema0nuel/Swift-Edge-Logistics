@@ -4,9 +4,8 @@ import { reset } from "../../utils/reset";
 import toastr from "../../utils/toastr";
 import { sendEmail } from "../../utils/send-email";
 import dayjs from "dayjs";
-import userIcon from '../../../images/avatar-default.png'
+import userIcon from '../../../images/avatar-default.png';
 
-// --- Spinner ---
 function showSpinner() {
   if (document.getElementById("notifSpinner")) return;
   const spinner = document.createElement("div");
@@ -26,18 +25,20 @@ const notifications = async () => {
   reset("Notifications");
   const { html: navbarHtml, pageEvents: navbarEvents } = Navbar();
 
-  // Fetch notifications, invoices, and profiles
   async function fetchAll() {
-    const [{ data: notifications }, { data: invoices }, { data: profiles }] = await Promise.all([
+    const [{ data: notifications }, { data: profiles }, { data: shipments }] = await Promise.all([
       supabase.from("notifications").select("*").order("created_at", { ascending: false }),
-      supabase.from("payments").select("*").order("created_at", { ascending: false }),
-      supabase.from("profiles").select("id, full_name, email, avatar_url")
+      supabase.from("profiles").select("id, full_name, email, avatar_url"),
+      supabase.from("shipments").select("id, receiver_name, receiver_address, receiver_phone, email")
     ]);
-    return { notifications: notifications || [], invoices: invoices || [], profiles: profiles || [] };
+    return {
+      notifications: notifications || [],
+      profiles: profiles || [],
+      shipments: shipments || []
+    };
   }
 
-  // Render notification list
-  function renderNotifications(notifications, profiles) {
+  function renderNotifications(notifications, profiles, shipments) {
     return `
       <div class="mb-8">
         <h2 class="text-3xl font-bold mb-4 text-white">User Notifications</h2>
@@ -57,12 +58,28 @@ const notifications = async () => {
                   <div class="flex gap-2 mt-2">
                     <button class="editNotifBtn px-3 py-1 rounded bg-yellow-500 text-white text-xs shadow hover:bg-yellow-600" data-id="${n.id}">Edit</button>
                     <button class="deleteNotifBtn px-3 py-1 rounded bg-red-500 text-white text-xs shadow hover:bg-red-600" data-id="${n.id}">Delete</button>
-                    <button class="emailNotifBtn px-3 py-1 rounded bg-blue-600 text-white text-xs shadow hover:bg-blue-700" data-id="${n.id}" data-email="${user.email}">Send Email</button>
+                    <button class="emailNotifBtn px-3 py-1 rounded bg-blue-600 text-white text-xs shadow hover:bg-blue-700" data-id="${n.id}" data-email="${user.email}">Send User Email</button>
                   </div>
                 </div>
               </div>
             `;
           }).join("") : `<div class="text-gray-400">No notifications found.</div>`}
+        </div>
+      </div>
+      <div class="mb-8">
+        <h2 class="text-2xl font-bold mb-4 text-white">All Receivers Info</h2>
+        <div class="space-y-4">
+          ${shipments.length ? shipments.map(rs => `
+            <div class="bg-indigo-50 rounded-lg p-4 mb-2 border border-indigo-100">
+              <div class="font-bold text-indigo-700 mb-2">Receiver Details</div>
+              <div><b>Name:</b> ${rs.receiver_name}</div>
+              <div><b>Address:</b> ${rs.receiver_address}</div>
+              <div><b>Phone:</b> ${rs.receiver_phone}</div>
+              <div><b>Email:</b> ${rs.email}</div>
+              <button class="emailReceiverBtn px-3 py-1 mt-2 rounded bg-blue-600 text-white text-xs shadow hover:bg-blue-700"
+                data-email="${rs.email}" data-title="Swift Edge Logistics" data-message="Hello ${rs.receiver_name}, this is a notification from Swift Edge Logistics.">Send Email to Receiver</button>
+            </div>
+          `).join("") : `<div class="text-gray-400">No receiver info found.</div>`}
         </div>
       </div>
       <div class="mb-8">
@@ -77,39 +94,6 @@ const notifications = async () => {
     `;
   }
 
-  // Render invoices/receipts
-  function renderInvoices(invoices, profiles) {
-    return `
-      <div class="mb-8">
-        <h2 class="text-3xl font-bold mb-4 text-white">Invoices & Receipts</h2>
-        <div class="space-y-4">
-          ${invoices.length ? invoices.map(inv => {
-            const user = profiles.find(p => p.id === inv.user_id) || {};
-            return `
-              <div class="bg-white/90 rounded-xl shadow-lg p-5 flex items-start gap-4 border border-indigo-100 hover:shadow-xl transition-all">
-                <img src="${user.avatar_url || userIcon }" class="w-12 h-12 rounded-full border-2 border-indigo-400" alt="User" />
-                <div class="flex-1">
-                  <div class="flex justify-between items-center mb-1">
-                    <span class="font-bold text-indigo-700 text-lg">${user.full_name || "Unknown"}</span>
-                    <span class="text-xs text-gray-400">${dayjs(inv.created_at).format("MMM D, YYYY")}</span>
-                  </div>
-                  <div class="font-semibold text-lg text-gray-800 mb-1">Invoice #${inv.id}</div>
-                  <div class="text-gray-600 mb-2">Amount: $${inv.amount} | Status: ${inv.status} | Method: ${inv.method}</div>
-                  <div class="flex gap-2 mt-2">
-                    <button class="viewInvoiceBtn px-3 py-1 rounded bg-green-600 text-white text-xs shadow hover:bg-green-700" data-id="${inv.id}">View</button>
-                    <button class="emailInvoiceBtn px-3 py-1 rounded bg-blue-600 text-white text-xs shadow hover:bg-blue-700" data-id="${inv.id}" data-email="${user.email}">Resend Receipt</button>
-                    <button class="downloadInvoiceBtn px-3 py-1 rounded bg-indigo-600 text-white text-xs shadow hover:bg-indigo-700" data-id="${inv.id}">Download</button>
-                  </div>
-                </div>
-              </div>
-            `;
-          }).join("") : `<div class="text-gray-400">No invoices found.</div>`}
-        </div>
-      </div>
-    `;
-  }
-
-  // Edit notification modal
   function showEditModal(notif) {
     const modalHtml = `
       <div id="editNotifModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
@@ -147,73 +131,6 @@ const notifications = async () => {
     });
   }
 
-  // View invoice modal
-  function showInvoiceModal(invoice, user) {
-    const modalHtml = `
-      <div id="viewInvoiceModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-        <div class="bg-white rounded-xl p-8 w-full max-w-lg shadow-lg relative animate-slideIn">
-          <button id="closeViewInvoiceModalBtn" class="absolute top-4 right-4 text-gray-500 hover:text-red-500 text-xl">×</button>
-          <h2 class="text-2xl font-bold mb-4 text-gray-800">Invoice Details</h2>
-          <div class="mb-4">
-            <strong>Invoice #${invoice.id}</strong><br/>
-            <strong>User:</strong> ${user.full_name || "Unknown"}<br/>
-            <strong>Email:</strong> ${user.email || "N/A"}<br/>
-            <strong>Amount:</strong> $${invoice.amount}<br/>
-            <strong>Status:</strong> ${invoice.status}<br/>
-            <strong>Method:</strong> ${invoice.method}<br/>
-            <strong>Date:</strong> ${dayjs(invoice.created_at).format("MMM D, YYYY")}
-          </div>
-          <button id="downloadInvoiceBtnModal" class="btn btn-primary w-full py-2 font-bold bg-gradient-to-r from-indigo-600 to-indigo-700 text-white">Download Invoice</button>
-        </div>
-      </div>
-    `;
-    document.body.insertAdjacentHTML("beforeend", modalHtml);
-    document.getElementById("closeViewInvoiceModalBtn")?.addEventListener("click", () => {
-      document.getElementById("viewInvoiceModal")?.remove();
-    });
-    document.getElementById("downloadInvoiceBtnModal")?.addEventListener("click", () => {
-      exportInvoice(invoice, user);
-    });
-  }
-
-  // Export/download invoice as PDF (simple HTML to PDF)
-  function exportInvoice(invoice, user) {
-    const html = `
-      <html>
-      <head>
-        <title>Invoice #${invoice.id}</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 2em; }
-          .header { font-size: 2em; font-weight: bold; margin-bottom: 1em; }
-          .section { margin-bottom: 1em; }
-        </style>
-      </head>
-      <body>
-        <div class="header">Swift Edge Logistics - Invoice</div>
-        <div class="section"><strong>Invoice #:</strong> ${invoice.id}</div>
-        <div class="section"><strong>User:</strong> ${user.full_name || "Unknown"}</div>
-        <div class="section"><strong>Email:</strong> ${user.email || "N/A"}</div>
-        <div class="section"><strong>Amount:</strong> $${invoice.amount}</div>
-        <div class="section"><strong>Status:</strong> ${invoice.status}</div>
-        <div class="section"><strong>Method:</strong> ${invoice.method}</div>
-        <div class="section"><strong>Date:</strong> ${dayjs(invoice.created_at).format("MMM D, YYYY")}</div>
-      </body>
-      </html>
-    `;
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Invoice_${invoice.id}.html`;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      a.remove();
-      URL.revokeObjectURL(url);
-    }, 1000);
-  }
-
-  // Send email to any address
   async function sendNotificationEmail(email, title, message) {
     showSpinner();
     try {
@@ -235,38 +152,9 @@ const notifications = async () => {
     hideSpinner();
   }
 
-  // Send invoice/receipt email
-  async function sendInvoiceEmail(email, invoice, user) {
-    showSpinner();
-    try {
-      await sendEmail({
-        to: email,
-        subject: `Your Invoice from Swift Edge Logistics`,
-        html: `
-          <h2>Invoice #${invoice.id}</h2>
-          <p>Dear ${user.full_name || "Customer"},</p>
-          <p>Thank you for your payment. Here is your receipt:</p>
-          <ul>
-            <li><strong>Amount:</strong> $${invoice.amount}</li>
-            <li><strong>Status:</strong> ${invoice.status}</li>
-            <li><strong>Method:</strong> ${invoice.method}</li>
-            <li><strong>Date:</strong> ${dayjs(invoice.created_at).format("MMM D, YYYY")}</li>
-          </ul>
-          <p>Swift Edge Logistics Team</p>
-        `
-      });
-      toastr.success("Receipt sent to customer!");
-    } catch (err) {
-      toastr.error("Failed to send receipt.");
-    }
-    hideSpinner();
-  }
-
-  // Main event handlers
-  function mainEvents(notifications, invoices, profiles) {
+  function mainEvents(notifications, profiles, shipments) {
     navbarEvents();
 
-    // Edit notification
     document.querySelectorAll(".editNotifBtn").forEach(btn => {
       btn.addEventListener("click", () => {
         const notif = notifications.find(n => n.id === btn.dataset.id);
@@ -274,7 +162,6 @@ const notifications = async () => {
       });
     });
 
-    // Delete notification
     document.querySelectorAll(".deleteNotifBtn").forEach(btn => {
       btn.addEventListener("click", async () => {
         await supabase.from("notifications").delete().eq("id", btn.dataset.id);
@@ -283,7 +170,6 @@ const notifications = async () => {
       });
     });
 
-    // Send notification email (from notification card)
     document.querySelectorAll(".emailNotifBtn").forEach(btn => {
       btn.addEventListener("click", async () => {
         const notif = notifications.find(n => n.id === btn.dataset.id);
@@ -296,38 +182,19 @@ const notifications = async () => {
       });
     });
 
-    // View invoice
-    document.querySelectorAll(".viewInvoiceBtn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const invoice = invoices.find(i => i.id === btn.dataset.id);
-        const user = profiles.find(p => p.id === invoice.user_id) || {};
-        showInvoiceModal(invoice, user);
-      });
-    });
-
-    // Resend invoice/receipt
-    document.querySelectorAll(".emailInvoiceBtn").forEach(btn => {
+    document.querySelectorAll(".emailReceiverBtn").forEach(btn => {
       btn.addEventListener("click", async () => {
-        const invoice = invoices.find(i => i.id === btn.dataset.id);
-        const user = profiles.find(p => p.id === invoice.user_id) || {};
-        if (user?.email) {
-          await sendInvoiceEmail(user.email, invoice, user);
+        const email = btn.dataset.email;
+        const title = btn.dataset.title;
+        const message = btn.dataset.message;
+        if (email) {
+          await sendNotificationEmail(email, title, message);
         } else {
-          toastr.error("User email not found.");
+          toastr.error("Receiver email not found.");
         }
       });
     });
 
-    // Download invoice
-    document.querySelectorAll(".downloadInvoiceBtn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const invoice = invoices.find(i => i.id === btn.dataset.id);
-        const user = profiles.find(p => p.id === invoice.user_id) || {};
-        exportInvoice(invoice, user);
-      });
-    });
-
-    // Admin direct email form (send to any email)
     document.getElementById("adminSendEmailForm")?.addEventListener("submit", async (e) => {
       e.preventDefault();
       const email = document.getElementById("adminEmailTo").value.trim();
@@ -344,18 +211,16 @@ const notifications = async () => {
     });
   }
 
-  // Render main UI
   async function renderMain() {
     showSpinner();
-    const { notifications, invoices, profiles } = await fetchAll();
+    const { notifications, profiles, shipments } = await fetchAll();
     hideSpinner();
     const html = `
       <div class="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-indigo-900 flex">
         ${navbarHtml}
         <div class="flex-1 ml-0 sm:ml-64 h-screen overflow-y-auto transition-all duration-300">
           <main class="p-4 md:p-8 max-w-5xl mx-auto animate-fadeIn">
-            ${renderNotifications(notifications, profiles)}
-            ${renderInvoices(invoices, profiles)}
+            ${renderNotifications(notifications, profiles, shipments)}
           </main>
         </div>
       </div>
@@ -368,7 +233,7 @@ const notifications = async () => {
       </style>
     `;
     document.querySelector("#app").innerHTML = html;
-    mainEvents(notifications, invoices, profiles);
+    mainEvents(notifications, profiles, shipments);
   }
 
   return { html: "", pageEvents: async () => await renderMain() }

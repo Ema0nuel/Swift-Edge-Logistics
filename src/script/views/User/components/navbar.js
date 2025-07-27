@@ -29,10 +29,10 @@ const Navbar = (currentPage = "dashboard") => {
   const html = `
     <header class="bg-white dark:bg-gray-800 shadow-md sticky top-0 z-50 transition-colors duration-300">
       <div class="container mx-auto px-4 py-4 flex justify-between items-center">
-        <!-- Logo -->
+       <!-- Logo -->
         <div class="flex items-center">
-          <img src="${Logo}" alt="SwiftEdge Logo" class="h-10 w-10 mr-2 rounded-full bg-white shadow" />
-          <span class="text-2xl font-bold text-gray-800 dark:text-white">SwiftEdge</span>
+          <img src="${Logo}" alt="SwiftEdge Logo" class="h-20 w-20 mr-4 rounded-full bg-white shadow-2xl border-4 border-indigo-600" />
+          <span class="text-4xl font-extrabold text-indigo-700 dark:text-indigo-300 tracking-wide drop-shadow-lg">SwiftEdge</span>
         </div>
         <!-- Desktop Navigation -->
         <nav id="desktop-nav" class="hidden md:flex space-x-6">

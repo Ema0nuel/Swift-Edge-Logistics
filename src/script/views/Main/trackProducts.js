@@ -18,19 +18,6 @@ import Icon from 'ol/style/Icon';
 import LineString from 'ol/geom/LineString';
 import { Stroke } from 'ol/style';
 
-// --- Geocoding Helper ---
-async function reverseGeocode(lat, lon) {
-  const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`;
-  try {
-    const response = await fetch(url);
-    const data = await response.json();
-    if (data && data.display_name) {
-      return data.display_name;
-    }
-  } catch (err) {}
-  return `${lat},${lon}`;
-}
-
 // --- Parse lat/lon from string ---
 function parseLatLon(location) {
   let [a, b] = location.split(',').map(Number);
@@ -38,61 +25,57 @@ function parseLatLon(location) {
 }
 
 // --- Map Logic (OpenLayers) ---
-// Always start from New York warehouse: [40.7127281, -74.0060152]
 const WAREHOUSE_LOCATION = [40.7127281, -74.0060152];
 
+async function getLatLonFromAddress(address) {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`;
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+    if (data && data.length > 0) {
+      return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+    }
+  } catch (err) {}
+  return [40.7127281, -74.0060152];
+}
+
 async function renderTrackingMap(containerId, updates) {
-  // Always start with warehouse location
+  // Always use admin input for label, decode for map
   const points = [
     WAREHOUSE_LOCATION,
-    ...updates
-      .map(u => parseLatLon(u.location))
-      .filter(([lat, lon]) => !isNaN(lat) && !isNaN(lon))
+    ...updates.map(u => u.location)
   ];
-
-  // Center on last point, or warehouse if only one
-  const center = points.length > 1 ? points[points.length - 1] : WAREHOUSE_LOCATION;
+  const decodedPoints = [];
+  for (let loc of points) {
+    if (typeof loc === "string" && loc.match(/^-?\d+\.\d+,-?\d+\.\d+$/)) {
+      decodedPoints.push(parseLatLon(loc));
+    } else if (loc) {
+      decodedPoints.push(await getLatLonFromAddress(loc));
+    } else {
+      decodedPoints.push(WAREHOUSE_LOCATION);
+    }
+  }
+  const center = decodedPoints.length > 1 ? decodedPoints[decodedPoints.length - 1] : WAREHOUSE_LOCATION;
   const centerWebMercator = transform([center[1], center[0]], 'EPSG:4326', 'EPSG:3857');
 
   document.getElementById(containerId).innerHTML = "";
 
   const map = new Map({
     target: containerId,
-    layers: [
-      new TileLayer({ source: new OSM() })
-    ],
-    view: new View({
-      center: centerWebMercator,
-      zoom: 10
-    })
+    layers: [new TileLayer({ source: new OSM() })],
+    view: new View({ center: centerWebMercator, zoom: 10 })
   });
 
-  // Draw path
-  if (points.length > 1) {
-    const lineCoords = points.map(([lat, lon]) => transform([lon, lat], 'EPSG:4326', 'EPSG:3857'));
-    const line = new Feature({
-      geometry: new LineString(lineCoords)
-    });
-    line.setStyle(new Style({
-      stroke: new Stroke({ color: '#F59E42', width: 4, lineDash: [8, 4] })
-    }));
-    const vectorSource = new VectorSource({ features: [line] });
-    const vectorLayer = new VectorLayer({ source: vectorSource });
-    map.addLayer(vectorLayer);
+  if (decodedPoints.length > 1) {
+    const lineCoords = decodedPoints.map(([lat, lon]) => transform([lon, lat], 'EPSG:4326', 'EPSG:3857'));
+    const line = new Feature({ geometry: new LineString(lineCoords) });
+    line.setStyle(new Style({ stroke: new Stroke({ color: '#F59E42', width: 4, lineDash: [8, 4] }) }));
+    map.addLayer(new VectorLayer({ source: new VectorSource({ features: [line] }) }));
   }
 
-  // Draw markers (warehouse and tracker stick)
-  for (let idx = 0; idx < points.length; idx++) {
-    const pt = points[idx];
-    let popupText = idx === 0 ? "Warehouse (New York)" : `Checkpoint #${idx}`;
-    let locationName = popupText;
-    if (idx > 0) {
-      locationName = await reverseGeocode(pt[0], pt[1]);
-      popupText = `Update: ${locationName}`;
-    }
-    const marker = new Feature({
-      geometry: new Point(transform([pt[1], pt[0]], 'EPSG:4326', 'EPSG:3857'))
-    });
+  for (let idx = 0; idx < decodedPoints.length; idx++) {
+    const pt = decodedPoints[idx];
+    const marker = new Feature({ geometry: new Point(transform([pt[1], pt[0]], 'EPSG:4326', 'EPSG:3857')) });
     marker.setStyle(new Style({
       image: new Icon({
         src: idx === 0
@@ -102,12 +85,8 @@ async function renderTrackingMap(containerId, updates) {
         anchor: [0.5, 1]
       })
     }));
-    marker.set('popup', popupText);
-    const vectorSource = new VectorSource({ features: [marker] });
-    const vectorLayer = new VectorLayer({ source: vectorSource });
-    map.addLayer(vectorLayer);
-
-    // Add popup on click
+    marker.set('popup', idx === 0 ? "Warehouse (New York)" : `Update: ${points[idx]}`);
+    map.addLayer(new VectorLayer({ source: new VectorSource({ features: [marker] }) }));
     map.on('singleclick', function (evt) {
       map.forEachFeatureAtPixel(evt.pixel, function (feature) {
         const popup = document.createElement('div');
@@ -127,14 +106,12 @@ async function renderTrackingMap(containerId, updates) {
       });
     });
   }
-
-  // Fit map to all points if more than one
-  if (points.length > 1) {
+  if (decodedPoints.length > 1) {
     const extent = [
-      Math.min(...points.map(pt => pt[1])), // min lon
-      Math.min(...points.map(pt => pt[0])), // min lat
-      Math.max(...points.map(pt => pt[1])), // max lon
-      Math.max(...points.map(pt => pt[0]))  // max lat
+      Math.min(...decodedPoints.map(pt => pt[1])),
+      Math.min(...decodedPoints.map(pt => pt[0])),
+      Math.max(...decodedPoints.map(pt => pt[1])),
+      Math.max(...decodedPoints.map(pt => pt[0]))
     ];
     map.getView().fit(transformExtent(extent, 'EPSG:4326', 'EPSG:3857'), { padding: [40, 40, 40, 40] });
   }
@@ -227,21 +204,16 @@ const trackProducts = () => {
       return;
     }
 
-    // Decode location names for history
+    // Show only admin input for history
     let historyHtml = "";
     for (const item of shipment.updates) {
-      let locationDisplay = item.location;
-      if (item.location && item.location.match(/^-?\d+\.\d+,-?\d+\.\d+$/)) {
-        const [lat, lon] = parseLatLon(item.location);
-        locationDisplay = await reverseGeocode(lat, lon);
-      }
       historyHtml += `
         <li class="flex items-start">
           <span class="text-indigo-500 dark:text-indigo-300 mr-3">&#x2022;</span>
           <div>
             <span class="font-medium">${dayjs(item.updated_at).format(
               "MMM D, HH:mm"
-            )}:</span> ${item.status} - ${locationDisplay} <span class="text-xs text-text-subtle">${item.note || ""}</span>
+            )}:</span> ${item.status} - ${item.location} <span class="text-xs text-text-subtle">${item.note || ""}</span>
           </div>
         </li>
       `;
@@ -251,12 +223,7 @@ const trackProducts = () => {
     let currentLocation = shipment.origin;
     if (shipment.updates.length) {
       const lastUpdate = shipment.updates[shipment.updates.length - 1];
-      if (lastUpdate.location && lastUpdate.location.match(/^-?\d+\.\d+,-?\d+\.\d+$/)) {
-        const [lat, lon] = parseLatLon(lastUpdate.location);
-        currentLocation = await reverseGeocode(lat, lon);
-      } else if (lastUpdate.location) {
-        currentLocation = lastUpdate.location;
-      }
+      currentLocation = lastUpdate.location;
     }
 
     document.getElementById("tracking-result-container").innerHTML = `
@@ -277,7 +244,6 @@ const trackProducts = () => {
       <div id="productMapContainer" style="height: 400px;" class="mb-8 rounded-lg overflow-hidden"></div>
     `;
 
-    // Show map with tracker stick markers
     setTimeout(() => {
       renderTrackingMap('productMapContainer', shipment.updates);
     }, 100);
