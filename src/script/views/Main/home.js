@@ -75,70 +75,74 @@ const industryGrid = [
   { title: "Technology", img: "tech.svg", brands: ["helix.png", "ricon.png"] }
 ];
 
+// --- QR Code Loader ---
+function loadQRCodeLib(cb) {
+  if (window.QRCode) return cb();
+  const script = document.createElement("script");
+  script.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";
+  script.onload = cb;
+  document.body.appendChild(script);
+}
+
 // --- Geocoding Helper ---
-async function reverseGeocode(lat, lon) {
-  const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`;
+async function getLatLonFromAddress(address) {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`;
   try {
     const response = await fetch(url);
     const data = await response.json();
-    if (data && data.display_name) {
-      return data.display_name;
+    if (data && data.length > 0) {
+      return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
     }
   } catch (err) {}
-  return `${lat},${lon}`;
+  return [40.7127281, -74.0060152];
 }
-
-// --- Parse lat/lon from string ---
 function parseLatLon(location) {
   let [a, b] = location.split(',').map(Number);
   return [a, b];
 }
 
-// --- Map Logic (OpenLayers) ---
+// --- Map Logic ---
 const WAREHOUSE_LOCATION = [40.7127281, -74.0060152];
 async function renderTrackingMap(containerId, updates) {
   const points = [
     WAREHOUSE_LOCATION,
-    ...updates
-      .map(u => parseLatLon(u.location))
-      .filter(([lat, lon]) => !isNaN(lat) && !isNaN(lon))
+    ...updates.map(u => {
+      if (typeof u.location === "string" && u.location.match(/^-?\d+\.\d+,-?\d+\.\d+$/)) {
+        return parseLatLon(u.location);
+      } else if (typeof u.location === "string" && u.location) {
+        return null; // Will geocode below
+      } else if (Array.isArray(u.location)) {
+        return u.location;
+      } else {
+        return null;
+      }
+    })
   ];
+  for (let i = 0; i < points.length; i++) {
+    if (points[i] === null && updates[i - 1]) {
+      points[i] = await getLatLonFromAddress(updates[i - 1].location);
+    }
+  }
+  for (let i = 0; i < points.length; i++) {
+    if (!points[i]) points[i] = WAREHOUSE_LOCATION;
+  }
   const center = points.length > 1 ? points[points.length - 1] : WAREHOUSE_LOCATION;
   const centerWebMercator = transform([center[1], center[0]], 'EPSG:4326', 'EPSG:3857');
   document.getElementById(containerId).innerHTML = "";
   const map = new Map({
     target: containerId,
-    layers: [
-      new TileLayer({ source: new OSM() })
-    ],
-    view: new View({
-      center: centerWebMercator,
-      zoom: 10
-    })
+    layers: [new TileLayer({ source: new OSM() })],
+    view: new View({ center: centerWebMercator, zoom: 10 })
   });
   if (points.length > 1) {
     const lineCoords = points.map(([lat, lon]) => transform([lon, lat], 'EPSG:4326', 'EPSG:3857'));
-    const line = new Feature({
-      geometry: new LineString(lineCoords)
-    });
-    line.setStyle(new Style({
-      stroke: new Stroke({ color: '#4285f4', width: 3 })
-    }));
-    const vectorSource = new VectorSource({ features: [line] });
-    const vectorLayer = new VectorLayer({ source: vectorSource });
-    map.addLayer(vectorLayer);
+    const line = new Feature({ geometry: new LineString(lineCoords) });
+    line.setStyle(new Style({ stroke: new Stroke({ color: '#4285f4', width: 3 }) }));
+    map.addLayer(new VectorLayer({ source: new VectorSource({ features: [line] }) }));
   }
   for (let idx = 0; idx < points.length; idx++) {
     const pt = points[idx];
-    let popupText = idx === 0 ? "Warehouse (New York)" : `Checkpoint #${idx}`;
-    let locationName = popupText;
-    if (idx > 0) {
-      locationName = await reverseGeocode(pt[0], pt[1]);
-      popupText = `Update: ${locationName}`;
-    }
-    const marker = new Feature({
-      geometry: new Point(transform([pt[1], pt[0]], 'EPSG:4326', 'EPSG:3857'))
-    });
+    const marker = new Feature({ geometry: new Point(transform([pt[1], pt[0]], 'EPSG:4326', 'EPSG:3857')) });
     marker.setStyle(new Style({
       image: new Icon({
         src: idx === 0
@@ -148,10 +152,8 @@ async function renderTrackingMap(containerId, updates) {
         anchor: [0.5, 1]
       })
     }));
-    marker.set('popup', popupText);
-    const vectorSource = new VectorSource({ features: [marker] });
-    const vectorLayer = new VectorLayer({ source: vectorSource });
-    map.addLayer(vectorLayer);
+    marker.set('popup', idx === 0 ? "Warehouse (New York)" : `Update: ${updates[idx - 1]?.location || "Unknown"}`);
+    map.addLayer(new VectorLayer({ source: new VectorSource({ features: [marker] }) }));
     map.on('singleclick', function (evt) {
       map.forEachFeatureAtPixel(evt.pixel, function (feature) {
         const popup = document.createElement('div');
@@ -198,22 +200,85 @@ function hideSpinner() {
   document.getElementById("trackSpinner")?.remove();
 }
 
+// --- Receipt Modal ---
+function renderReceiptModal(shipment, updates) {
+  const qrDivId = "qr-code-receipt";
+  const receiptId = "shipment-receipt-modal";
+  const receiptHtml = `
+    <div id="${receiptId}" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
+      <div class="bg-white rounded-xl p-8 w-full max-w-2xl shadow-lg relative animate-slideIn overflow-auto" style="max-height:90vh;">
+        <button id="closeReceiptModalBtn" class="absolute top-4 right-4 text-gray-500 hover:text-red-500 text-xl">×</button>
+        <div class="flex flex-col md:flex-row gap-4 items-center mb-6">
+          <div>
+            <div id="${qrDivId}" class="mb-2"></div>
+            <div class="flex gap-2">
+              <img src="https://i.ibb.co/4f1wQ4z/guarantee-stamp.png" alt="Guarantee" style="height:40px;">
+              <img src="https://i.ibb.co/2c7pXvG/dispatched-stamp.png" alt="Dispatched" style="height:40px;">
+            </div>
+          </div>
+          <div class="flex-1">
+            <h2 class="text-2xl font-bold mb-2">Swift Edge Logistics</h2>
+            <p><b>Origin Service Area:</b> ${shipment.origin}</p>
+            <p><b>Destination Service Area:</b> ${shipment.destination}</p>
+          </div>
+        </div>
+        <table class="w-full mb-4 border">
+          <thead>
+            <tr class="bg-gray-100">
+              <th class="p-2 border">Date & Time</th>
+              <th class="p-2 border">Status</th>
+              <th class="p-2 border">Location</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${updates.map(u => `
+              <tr>
+                <td class="p-2 border">${dayjs(u.updated_at).format("YYYY-MM-DD HH:mm:ss")}</td>
+                <td class="p-2 border">${u.status}</td>
+                <td class="p-2 border">${u.location}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+        <div class="flex flex-col items-center gap-2 mb-2">
+          <span class="font-bold text-green-700 text-lg">DISPATCHED</span>
+          <span class="font-bold text-red-700 text-lg">GUARANTEE</span>
+        </div>
+        <div class="text-center text-sm text-gray-600 mb-2">
+          Here's the fastest way to check the status of your shipment. Enter tracking code of the shipment into the tracking textbox above!
+        </div>
+        <button onclick="window.print()" class="px-4 py-2 rounded bg-indigo-600 text-white font-bold shadow hover:bg-indigo-700 transition-all">Print</button>
+      </div>
+    </div>
+    <style>
+      .animate-slideIn { animation: slideIn 0.4s cubic-bezier(.4,0,.2,1); }
+      @keyframes slideIn { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    </style>
+  `;
+  document.body.insertAdjacentHTML("beforeend", receiptHtml);
+  loadQRCodeLib(() => {
+    new window.QRCode(qrDivId, {
+      text: shipment.tracking_code,
+      width: 80,
+      height: 80
+    });
+  });
+  document.getElementById("closeReceiptModalBtn")?.addEventListener("click", () => {
+    document.getElementById(receiptId)?.remove();
+  });
+}
+
 // --- Modal ---
 async function renderTrackingModal(shipment) {
   hideSpinner();
   document.getElementById("trackingModal")?.remove();
   let historyHtml = "";
   for (const item of shipment.updates) {
-    let locationDisplay = item.location;
-    if (item.location && item.location.match(/^-?\d+\.\d+,-?\d+\.\d+$/)) {
-      const [lat, lon] = parseLatLon(item.location);
-      locationDisplay = await reverseGeocode(lat, lon);
-    }
     historyHtml += `
       <li class="flex flex-col md:flex-row items-start gap-2 mb-2">
         <div>
           <span class="font-medium">${dayjs(item.updated_at).format("MMM D, HH:mm")}:</span>
-          ${item.status} - ${locationDisplay}
+          ${item.status} - ${item.location}
           <span class="text-xs text-text-subtle">${item.note || ""}</span>
         </div>
       </li>
@@ -222,18 +287,17 @@ async function renderTrackingModal(shipment) {
   let currentLocation = shipment.origin;
   if (shipment.updates.length) {
     const lastUpdate = shipment.updates[shipment.updates.length - 1];
-    if (lastUpdate.location && lastUpdate.location.match(/^-?\d+\.\d+,-?\d+\.\d+$/)) {
-      const [lat, lon] = parseLatLon(lastUpdate.location);
-      currentLocation = await reverseGeocode(lat, lon);
-    } else if (lastUpdate.location) {
-      currentLocation = lastUpdate.location;
-    }
+    currentLocation = lastUpdate.location;
   }
   const modalHtml = `
     <div id="trackingModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
       <div class="bg-white dark:bg-gray-800 rounded-xl p-8 w-full max-w-2xl shadow-lg relative animate-slideIn overflow-auto" style="max-height:90vh;">
         <button id="closeTrackingModalBtn" class="absolute top-4 right-4 text-gray-500 hover:text-red-500 text-xl">×</button>
         <h2 class="text-2xl font-bold mb-4 text-gray-800 dark:text-gray-100">Tracking Details - ${shipment.tracking_code}</h2>
+        <div class="mb-2">
+          <b>Receiver:</b> ${shipment.receiver_name} <br>
+          <b>Address:</b> ${shipment.receiver_address}
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-lg mb-4">
           <p><strong>Status:</strong> <span class="font-semibold">${shipment.status}</span></p>
           <p><strong>Current Location:</strong> ${currentLocation}</p>
@@ -244,14 +308,14 @@ async function renderTrackingModal(shipment) {
           <h4 class="text-xl font-semibold mb-3 text-gray-800 dark:text-gray-100">Tracking History</h4>
           <ul class="space-y-2">${historyHtml}</ul>
         </div>
+        <div class="mt-4 flex gap-2">
+          <button id="generateReceiptBtn" class="px-4 py-2 rounded bg-green-600 text-white font-bold shadow hover:bg-green-700 transition-all">Generate Receipt</button>
+        </div>
       </div>
     </div>
     <style>
       .animate-slideIn { animation: slideIn 0.4s cubic-bezier(.4,0,.2,1); }
-      @keyframes slideIn {
-        from { transform: translateY(40px); opacity: 0; }
-        to { transform: translateY(0); opacity: 1; }
-      }
+      @keyframes slideIn { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
       .ol-popup { font-size: 1rem; pointer-events: none; z-index: 1000; }
     </style>
   `;
@@ -261,6 +325,9 @@ async function renderTrackingModal(shipment) {
   }, 100);
   document.getElementById("closeTrackingModalBtn")?.addEventListener("click", () => {
     document.getElementById("trackingModal")?.remove();
+  });
+  document.getElementById("generateReceiptBtn")?.addEventListener("click", () => {
+    renderReceiptModal(shipment, shipment.updates);
   });
 }
 
@@ -587,3 +654,5 @@ const home = () => {
 };
 
 export default home;
+
+

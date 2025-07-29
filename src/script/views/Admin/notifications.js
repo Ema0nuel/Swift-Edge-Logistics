@@ -21,6 +21,46 @@ function hideSpinner() {
   document.getElementById("notifSpinner")?.remove();
 }
 
+function showEmailModal({ to, email, title = "", message = "", onSend }) {
+  const modalId = "customEmailModal";
+  document.getElementById(modalId)?.remove();
+  const html = `
+    <div id="${modalId}" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+      <div class="bg-white rounded-xl p-8 w-full max-w-lg shadow-lg relative animate-slideIn">
+        <button id="closeCustomEmailModalBtn" class="absolute top-4 right-4 text-gray-500 hover:text-red-500 text-xl">×</button>
+        <h2 class="text-2xl font-bold mb-4 text-gray-800">Send Email to ${to}</h2>
+        <form id="customEmailForm" class="space-y-4">
+          <input type="email" name="email" value="${email}" placeholder="Recipient Email" class="input input-bordered w-full py-2 px-4 rounded-lg" required />
+          <input type="text" name="title" value="${title}" placeholder="Subject" class="input input-bordered w-full py-2 px-4 rounded-lg" required />
+          <textarea name="message" placeholder="Message" class="input input-bordered w-full py-2 px-4 rounded-lg" required>${message}</textarea>
+          <button type="submit" class="btn btn-primary w-full py-2 font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white">Send Email</button>
+        </form>
+      </div>
+    </div>
+    <style>
+      .animate-slideIn { animation: slideIn 0.4s cubic-bezier(.4,0,.2,1); }
+      @keyframes slideIn { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    </style>
+  `;
+  document.body.insertAdjacentHTML("beforeend", html);
+  document.getElementById("closeCustomEmailModalBtn")?.addEventListener("click", () => {
+    document.getElementById(modalId)?.remove();
+  });
+  document.getElementById("customEmailForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const emailVal = form.email.value.trim();
+    const titleVal = form.title.value.trim();
+    const messageVal = form.message.value.trim();
+    if (!emailVal || !titleVal || !messageVal) {
+      toastr.error("Please fill all fields.");
+      return;
+    }
+    await onSend(emailVal, titleVal, messageVal);
+    document.getElementById(modalId)?.remove();
+  });
+}
+
 const notifications = async () => {
   reset("Notifications");
   const { html: navbarHtml, pageEvents: navbarEvents } = Navbar();
@@ -58,7 +98,7 @@ const notifications = async () => {
                   <div class="flex gap-2 mt-2">
                     <button class="editNotifBtn px-3 py-1 rounded bg-yellow-500 text-white text-xs shadow hover:bg-yellow-600" data-id="${n.id}">Edit</button>
                     <button class="deleteNotifBtn px-3 py-1 rounded bg-red-500 text-white text-xs shadow hover:bg-red-600" data-id="${n.id}">Delete</button>
-                    <button class="emailNotifBtn px-3 py-1 rounded bg-blue-600 text-white text-xs shadow hover:bg-blue-700" data-id="${n.id}" data-email="${user.email}">Send User Email</button>
+                    <button class="emailNotifBtn px-3 py-1 rounded bg-blue-600 text-white text-xs shadow hover:bg-blue-700" data-id="${n.id}" data-email="${user.email}" data-name="${user.full_name || "User"}">Send Custom Email</button>
                   </div>
                 </div>
               </div>
@@ -77,19 +117,14 @@ const notifications = async () => {
               <div><b>Phone:</b> ${rs.receiver_phone}</div>
               <div><b>Email:</b> ${rs.email}</div>
               <button class="emailReceiverBtn px-3 py-1 mt-2 rounded bg-blue-600 text-white text-xs shadow hover:bg-blue-700"
-                data-email="${rs.email}" data-title="Swift Edge Logistics" data-message="Hello ${rs.receiver_name}, this is a notification from Swift Edge Logistics.">Send Email to Receiver</button>
+                data-email="${rs.email}" data-name="${rs.receiver_name}">Send Custom Email</button>
             </div>
           `).join("") : `<div class="text-gray-400">No receiver info found.</div>`}
         </div>
       </div>
       <div class="mb-8">
         <h2 class="text-2xl font-bold mb-4 text-white">Send Email Notification</h2>
-        <form id="adminSendEmailForm" class="flex flex-col md:flex-row gap-4 items-center bg-white/90 rounded-xl shadow-lg p-6 border border-indigo-100">
-          <input type="email" id="adminEmailTo" placeholder="Recipient Email" class="input input-bordered py-2 px-4 rounded-lg flex-1" required />
-          <input type="text" id="adminEmailTitle" placeholder="Subject" class="input input-bordered py-2 px-4 rounded-lg flex-1" required />
-          <textarea id="adminEmailMessage" placeholder="Message" class="input input-bordered py-2 px-4 rounded-lg flex-1" required></textarea>
-          <button type="submit" class="btn btn-primary py-2 px-6 font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow hover:scale-105 transition-all">Send Email</button>
-        </form>
+        <button id="openAdminEmailModalBtn" class="btn btn-primary py-2 px-6 font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow hover:scale-105 transition-all">Send Custom Email</button>
       </div>
     `;
   }
@@ -174,40 +209,39 @@ const notifications = async () => {
       btn.addEventListener("click", async () => {
         const notif = notifications.find(n => n.id === btn.dataset.id);
         const email = btn.dataset.email;
-        if (email) {
-          await sendNotificationEmail(email, notif.title, notif.message);
-        } else {
-          toastr.error("User email not found.");
-        }
+        const name = btn.dataset.name || "User";
+        showEmailModal({
+          to: name,
+          email: email,
+          title: notif.title,
+          message: notif.message,
+          onSend: sendNotificationEmail
+        });
       });
     });
 
     document.querySelectorAll(".emailReceiverBtn").forEach(btn => {
       btn.addEventListener("click", async () => {
         const email = btn.dataset.email;
-        const title = btn.dataset.title;
-        const message = btn.dataset.message;
-        if (email) {
-          await sendNotificationEmail(email, title, message);
-        } else {
-          toastr.error("Receiver email not found.");
-        }
+        const name = btn.dataset.name || "Receiver";
+        showEmailModal({
+          to: name,
+          email: email,
+          title: "",
+          message: "",
+          onSend: sendNotificationEmail
+        });
       });
     });
 
-    document.getElementById("adminSendEmailForm")?.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const email = document.getElementById("adminEmailTo").value.trim();
-      const title = document.getElementById("adminEmailTitle").value.trim();
-      const message = document.getElementById("adminEmailMessage").value.trim();
-      if (!email || !title || !message) {
-        toastr.error("Please fill all fields.");
-        return;
-      }
-      await sendNotificationEmail(email, title, message);
-      document.getElementById("adminEmailTo").value = "";
-      document.getElementById("adminEmailTitle").value = "";
-      document.getElementById("adminEmailMessage").value = "";
+    document.getElementById("openAdminEmailModalBtn")?.addEventListener("click", () => {
+      showEmailModal({
+        to: "Custom Recipient",
+        email: "",
+        title: "",
+        message: "",
+        onSend: sendNotificationEmail
+      });
     });
   }
 
