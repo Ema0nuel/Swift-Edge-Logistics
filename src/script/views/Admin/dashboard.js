@@ -120,7 +120,7 @@ const dashboard = async () => {
   const stats = await fetchDashboardData();
 
   // Render dashboard with fixed sidebar and scrollable main content
-  const html = `
+  const html = /* html */ `
     <div class="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-indigo-900 flex">
       ${navbarHtml}
       <div class="flex-1 ml-0 sm:ml-64 h-screen overflow-y-auto transition-all duration-300">
@@ -136,11 +136,11 @@ const dashboard = async () => {
           </div>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             ${[
-              { icon: 'users', label: 'Total Users', value: stats.userCount, color: 'blue' },
-              { icon: 'truck', label: 'Shipments', value: stats.shipmentCount, color: 'green' },
-              { icon: 'credit-card', label: 'Payments', value: stats.paymentCount, color: 'purple' },
-              { icon: 'clock', label: 'Pending Amount', value: formatCurrency(stats.pendingAmount), color: 'yellow' }
-            ].map((stat, index) => `
+      { icon: 'users', label: 'Total Users', value: stats.userCount, color: 'blue' },
+      { icon: 'truck', label: 'Shipments', value: stats.shipmentCount, color: 'green' },
+      { icon: 'credit-card', label: 'Payments', value: stats.paymentCount, color: 'purple' },
+      { icon: 'clock', label: 'Pending Amount', value: formatCurrency(stats.pendingAmount), color: 'yellow' }
+    ].map((stat, index) => `
               <div class="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 transform transition-all duration-300 hover:scale-105 animate-slideIn" 
                    style="animation-delay: ${index * 100}ms">
                 <div class="flex items-center justify-between">
@@ -174,7 +174,7 @@ const dashboard = async () => {
               <div class="space-y-4">
                 ${stats.recentShipments.map(shipment => `
                   <div class="flex items-center gap-4 p-4 rounded-lg bg-white/5 hover:bg-white/10 transition-all">
-                    <img src="${shipment.image_url || packageLogo }" 
+                    <img src="${shipment.image_url || packageLogo}" 
                          alt="Package" class="w-12 h-12 rounded-lg object-cover">
                     <div class="flex-1">
                       <div class="text-white font-medium">${shipment.tracking_code}</div>
@@ -183,8 +183,8 @@ const dashboard = async () => {
                     </div>
                     <span class="px-3 py-1 rounded-full text-xs font-medium
                       ${shipment.status === 'delivered' ? 'bg-green-500/20 text-green-400' :
-                      shipment.status === 'in-transit' ? 'bg-blue-500/20 text-blue-400' :
-                      'bg-yellow-500/20 text-yellow-400'}">
+        shipment.status === 'in-transit' ? 'bg-blue-500/20 text-blue-400' :
+          'bg-yellow-500/20 text-yellow-400'}">
                       ${shipment.status}
                     </span>
                   </div>
@@ -207,8 +207,8 @@ const dashboard = async () => {
                     </div>
                     <span class="px-3 py-1 rounded-full text-xs font-medium
                       ${payment.status === 'paid' ? 'bg-green-500/20 text-green-400' :
-                      payment.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
-                      'bg-red-500/20 text-red-400'}">
+              payment.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                'bg-red-500/20 text-red-400'}">
                       ${payment.status}
                     </span>
                   </div>

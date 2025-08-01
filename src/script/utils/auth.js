@@ -1,3 +1,4 @@
+import AdminLogo from '/src/images/avatar-default.png'
 const SECRET_KEY = 'SwiftEdge_Admin_2025';
 
 // Admin credentials (in production, this should be in a secure backend)
@@ -8,7 +9,7 @@ const ADMIN_CREDENTIALS = {
     id: 'admin-001',
     full_name: 'SwiftEdge Admin',
     role: 'admin',
-    avatar_url: '/src/images/admin-avatar.jpg'
+    avatar_url: `${AdminLogo}`
   }
 };
 
