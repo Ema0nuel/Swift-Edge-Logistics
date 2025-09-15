@@ -38,15 +38,7 @@ const courierCompanies = [
   "DHL Express",
   "FedEx",
   "UPS",
-  "Maersk",
-  "DB Schenker",
-  "Kuehne + Nagel",
-  "C.H. Robinson",
-  "XPO Logistics",
-  "Nippon Express",
-  "Blue Dart",
-  "Aramex",
-  "YRC Worldwide"
+  "Swift Edge Logistics"
 ];
 
 const itemCategories = [

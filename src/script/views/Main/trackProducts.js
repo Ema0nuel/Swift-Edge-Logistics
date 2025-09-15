@@ -44,7 +44,7 @@ async function getLatLonFromAddress(address) {
     if (data && data.length > 0) {
       return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
     }
-  } catch (err) {}
+  } catch (err) { }
   return [40.7127281, -74.0060152];
 }
 
@@ -217,7 +217,7 @@ async function renderTrackingModal(shipment) {
     const lastUpdate = shipment.updates[shipment.updates.length - 1];
     currentLocation = lastUpdate.location;
   }
-  const modalHtml = `
+  const modalHtml = /* html */`
     <div id="trackingModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
       <div class="bg-white dark:bg-gray-800 rounded-xl p-8 w-full max-w-2xl shadow-lg relative animate-slideIn overflow-auto" style="max-height:90vh;">
         <button id="closeTrackingModalBtn" class="absolute top-4 right-4 text-gray-500 hover:text-red-500 text-xl">×</button>
@@ -387,7 +387,7 @@ const trackProducts = () => {
     });
   }
 
-  function pageEvents(onNavigate = () => {}) {
+  function pageEvents(onNavigate = () => { }) {
     navbarEvents(onNavigate);
     reset("Track Product");
     document
