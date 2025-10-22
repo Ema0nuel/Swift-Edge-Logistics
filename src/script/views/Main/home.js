@@ -20,6 +20,10 @@ import Style from 'ol/style/Style';
 import Icon from 'ol/style/Icon';
 import LineString from 'ol/geom/LineString';
 import { Stroke } from 'ol/style';
+import ICON1 from '../../../images/icons/icon1.svg'
+import ICON2 from '../../../images/icons/icon2.svg'
+import ICON3 from '../../../images/icons/icon3.svg'
+import ICON4 from '../../../images/icons/icon4.svg'
 
 // --- Logo Wall Images ---
 const logoWallImages = [
@@ -61,10 +65,10 @@ const testimonials = [
 
 // --- Service Grid ---
 const serviceGrid = [
-  { icon: "fulfillment", title: "Order Fulfillment", desc: "Fast, accurate, and scalable fulfillment for all your ecommerce needs." },
-  { icon: "shipping", title: "Shipping", desc: "Same-day, next-day, and international shipping options." },
-  { icon: "returns", title: "Returns Management", desc: "Streamlined returns and reverse logistics." },
-  { icon: "inventory", title: "Inventory Management", desc: "Real-time inventory tracking and reporting." }
+  { icon: ICON1, title: "Order Fulfillment", desc: "Fast, accurate, and scalable fulfillment for all your ecommerce needs." },
+  { icon: ICON2, title: "Shipping", desc: "Same-day, next-day, and international shipping options." },
+  { icon: ICON3, title: "Returns Management", desc: "Streamlined returns and reverse logistics." },
+  { icon: ICON4, title: "Inventory Management", desc: "Real-time inventory tracking and reporting." }
 ];
 
 // --- Industry Grid ---
@@ -93,7 +97,7 @@ async function getLatLonFromAddress(address) {
     if (data && data.length > 0) {
       return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
     }
-  } catch (err) {}
+  } catch (err) { }
   return [40.7127281, -74.0060152];
 }
 function parseLatLon(location) {
@@ -528,7 +532,7 @@ const home = () => {
               <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
                 ${serviceGrid.map(s => `
                   <div class="flex flex-col items-center text-center transition hover:scale-105">
-                    <img class="h-16 mb-4" src="https://www.shipbob.com/wp-content/uploads/2024/12/${s.icon}.svg" alt="${s.title}">
+                    <img class="h-16 mb-4" src="${s.icon}" alt="${s.title}">
                     <h3 class="font-bold mb-2">${s.title}</h3>
                     <p>${s.desc}</p>
                   </div>
@@ -616,8 +620,8 @@ const home = () => {
               <h2 class="text-2xl md:text-3xl font-bold mb-6">Trusted By 270+ Global Brands</h2>
               <div class="flex flex-wrap justify-center gap-6">
                 ${[
-      "quest.png", "sprinkles.png", "labcorp-2.png", "american-red-cross-2.png", "mckesson.png", "holt.png", "texas-health.png", "kpmg.png", "helix.png", "ricon.png", "neiman.png", "susie-cackes.png"
-    ].map((img, i) => `
+        "quest.png", "sprinkles.png", "labcorp-2.png", "american-red-cross-2.png", "mckesson.png", "holt.png", "texas-health.png", "kpmg.png", "helix.png", "ricon.png", "neiman.png", "susie-cackes.png"
+      ].map((img, i) => `
                   <img src="https://www.dropoff.com/wp-content/themes/bb-theme-child/media/clients-logos-svg/${img}" alt="brand ${i}" class="h-12">
                 `).join('')}
               </div>
