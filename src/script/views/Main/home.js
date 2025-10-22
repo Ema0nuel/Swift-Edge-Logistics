@@ -24,6 +24,10 @@ import ICON1 from '../../../images/icons/icon1.svg'
 import ICON2 from '../../../images/icons/icon2.svg'
 import ICON3 from '../../../images/icons/icon3.svg'
 import ICON4 from '../../../images/icons/icon4.svg'
+import ICON5 from '../../../images/icons/icon5.svg'
+import ICON6 from '../../../images/icons/icon6.svg'
+import ICON7 from '../../../images/icons/icon7.svg'
+import ICON8 from '../../../images/icons/icon8.svg'
 
 // --- Logo Wall Images ---
 const logoWallImages = [
@@ -73,10 +77,10 @@ const serviceGrid = [
 
 // --- Industry Grid ---
 const industryGrid = [
-  { title: "Healthcare", img: "healthcare.svg", brands: ["quest.png", "labcorp-2.png"] },
-  { title: "Retail", img: "retail.svg", brands: ["neiman.png", "susie-cackes.png"] },
-  { title: "Food & Beverage", img: "food.svg", brands: ["sprinkles.png", "holt.png"] },
-  { title: "Technology", img: "tech.svg", brands: ["helix.png", "ricon.png"] }
+  { title: "Healthcare", img: ICON5, brands: [ICON5] },
+  { title: "Retail", img: ICON6, brands: [ICON6] },
+  { title: "Food & Beverage", img: ICON7, brands: [ICON7] },
+  { title: "Technology", img: ICON8, brands: [ICON8] }
 ];
 
 // --- QR Code Loader ---
@@ -577,10 +581,10 @@ const home = () => {
               <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
                 ${industryGrid.map(cat => `
                   <div class="flex flex-col items-center text-center">
-                    <img class="h-16 mb-4" src="https://www.shipbob.com/wp-content/uploads/2025/01/${cat.img}" alt="${cat.title}">
+                    <img class="h-16 mb-4" src="${cat.img}" alt="${cat.title}">
                     <h3 class="font-bold mb-2">${cat.title}</h3>
                     <div class="flex flex-wrap justify-center gap-2 mb-2">
-                      ${cat.brands.map(b => `<img class="h-8" src="https://www.shipbob.com/wp-content/uploads/2025/03/${b}" alt="">`).join('')}
+                      ${cat.brands.map(b => `<img class="h-8" src="${b}" alt="">`).join('')}
                     </div>
                     <a class="text-accent hover:underline" href="/about" data-nav>Learn more</a>
                   </div>
