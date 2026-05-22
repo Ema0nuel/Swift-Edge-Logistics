@@ -12,7 +12,7 @@
     "autoprefixer": "^10.4.21",
     "baseline-browser-mapping": "^2.9.4",
     "postcss": "^8.5.6",
-    "tailwindcss": "^3.4.17",
+    "tailwindcss": "^3.4.19",
     "vite": "^7.0.4"
   },
   "dependencies": {
@@ -21,7 +21,7 @@
     "chart.js": "^4.5.0",
     "cor": "^0.0.0",
     "cors": "^2.8.5",
-    "dayjs": "^1.11.13",
+    "dayjs": "^1.11.20",
     "dotenv": "^17.2.0",
     "express": "^5.1.0",
     "jspdf": "^3.0.1",
@@ -29,7 +29,7 @@
     "lodash": "^4.17.21",
     "maplibre-gl": "^5.6.1",
     "nanoid": "^5.1.5",
-    "ol": "^10.6.1",
+    "ol": "^10.9.0",
     "resend": "^4.7.0",
     "toastr": "^2.1.4"
   }

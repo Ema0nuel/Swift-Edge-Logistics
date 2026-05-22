@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 dotenv.config();
 
-import emailRouter from './api/sendEmail.js'; // router file
+import emailRouter from './api/send-email.js'; // router file
 
 
 const app = express();
