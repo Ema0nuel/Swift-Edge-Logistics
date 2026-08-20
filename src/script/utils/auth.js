@@ -3,7 +3,7 @@ const SECRET_KEY = 'SwiftEdge_Admin_2025';
 
 // Admin credentials (in production, this should be in a secure backend)
 const ADMIN_CREDENTIALS = {
-  email: 'admin@swiftedge.com',
+  email: 'admin@swiftedge.work',
   password: '12345EM@',
   profile: {
     id: 'admin-001',
