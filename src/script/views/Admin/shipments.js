@@ -203,7 +203,7 @@ async function addLiveTrackingUpdateAndNotify(shipmentId, location, status, note
         <li><b>Time:</b> ${dayjs().format("MMM D, YYYY HH:mm")}</li>
         <li><b>Receiver:</b> ${shipment.receiver_name} (${shipment.receiver_address})</li>
       </ul>
-      <p>Track your package anytime at <a href="https://www.swiftedgelogistics.com/track">SwiftEdge Logistics</a>.</p>
+      <p>Track your package anytime at <a href="https://www.swiftedgelogistics.work/track">SwiftEdge Logistics</a>.</p>
       <p style="margin-top:24px;color:#718096;">Swift Edge Logistics Team</p>
     </div>
   `;

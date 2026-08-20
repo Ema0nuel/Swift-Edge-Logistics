@@ -20,7 +20,7 @@ export default async function handler(req, res) {
 
   try {
     const result = await resend.emails.send({
-      from: 'Swift Edge Logistics <noreply@swiftedgelogistics.com>',
+      from: 'Swift Edge Logistics <noreply@swiftedgelogistics.work>',
       to,
       subject,
       html,
@@ -57,7 +57,7 @@ export default async function handler(req, res) {
 
 //   try {
 //     const result = await resend.emails.send({
-//       from: 'Swift Edge Logistics <support@swiftedgelogistics.com>',
+//       from: 'Swift Edge Logistics <support@swiftedgelogistics.work>',
 //       to,
 //       subject,
 //       html,
